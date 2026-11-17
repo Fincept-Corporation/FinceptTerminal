@@ -12,7 +12,7 @@ namespace fincept::services::options::book {
 
 namespace {
 
-constexpr double kBmMinYears = 0.25 / 365.0; ///< an option expiring today, without a chain: a quarter day
+[[maybe_unused]] constexpr double kBmMinYears = 0.25 / 365.0; ///< an option expiring today, without a chain: a quarter day
 
 bool bm_finite_pos(double v) {
     return std::isfinite(v) && v > 0;

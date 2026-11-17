@@ -367,7 +367,7 @@ void QuantStatsView::build_ui() {
             update_metrics();
         });
         metrics_tab_.pane->skeleton()->set_row_count(14);
-        metrics_tab_.empty_text = [this]() {
+        metrics_tab_.empty_text = []() {
             return tr("Performance, risk and ratio metrics of the current weights appear once the portfolio holds a "
                       "position.");
         };
@@ -406,7 +406,7 @@ void QuantStatsView::build_ui() {
             qs_data_ = p.toObject();
             update_returns();
         });
-        returns_tab_.empty_text = [this]() {
+        returns_tab_.empty_text = []() {
             return tr("The cumulative return, the distribution of daily returns and the monthly returns appear once "
                       "the portfolio holds a position.");
         };
@@ -420,7 +420,7 @@ void QuantStatsView::build_ui() {
             qs_data_ = p.toObject();
             update_drawdown();
         });
-        drawdown_tab_.empty_text = [this]() {
+        drawdown_tab_.empty_text = []() {
             return tr("The drawdown curve, the worst drawdown periods and the risk metrics appear once the portfolio "
                       "holds a position.");
         };
@@ -434,7 +434,7 @@ void QuantStatsView::build_ui() {
             qs_data_ = p.toObject();
             update_rolling();
         });
-        rolling_tab_.empty_text = [this]() {
+        rolling_tab_.empty_text = []() {
             return tr("Rolling Sharpe ratio, volatility and beta appear once the portfolio holds a position.");
         };
         rolling_scroll_ = make_scroll(rolling_tab_.pane);
@@ -541,7 +541,7 @@ QWidget* QuantStatsView::build_mc_page(QWidget* parent) {
     mc_tab_.pane->set_status_label(mc_status_);
     mc_tab_.pane->set_start([this](quint64 id) { start_monte_carlo(id); });
     mc_tab_.pane->set_cancel([this](quint64 id) { mc_requests_.take(id).cancel(); });
-    mc_tab_.empty_text = [this]() {
+    mc_tab_.empty_text = []() {
         return tr("A Monte Carlo simulation of the current weights appears once the portfolio holds a position.");
     };
     connect(mc_run_btn_, &QPushButton::clicked, mc_tab_.pane, &ui::AutoLoadPane::run);

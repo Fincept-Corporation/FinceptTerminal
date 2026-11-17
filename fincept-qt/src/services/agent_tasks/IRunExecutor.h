@@ -58,7 +58,24 @@ class IRunExecutor : public QObject {
     }
 
   signals:
+    // This signal shares its name with QObject::event(QEvent*), which clang and GCC report
+    // as hiding the virtual (-Woverloaded-virtual, an error in CI). The name is the plan's
+    // interface and is connected by pointer in several places (a `using QObject::event;`
+    // would make `&IRunExecutor::event` ambiguous there), so the warning is switched off
+    // for this one declaration.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Woverloaded-virtual"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#endif
     void event(const QString& run_id, const fincept::agent_tasks::RunEvent& ev);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     void text_delta(const QString& run_id, int step, const QString& chunk);
     void plan_ready(const QString& run_id, const QVector<fincept::agent_tasks::RunStep>& steps);
     void step_changed(const QString& run_id, int idx, fincept::agent_tasks::StepStatus s, const QString& summary);

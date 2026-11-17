@@ -141,7 +141,7 @@ struct BtKv {
     QString key;
     QString value;
     Tone tone = Tone::None;
-    QString tip; ///< tooltip of the value (e.g. why it is "—")
+    QString tip{}; ///< tooltip of the value (e.g. why it is "—")
 };
 
 /// Key / value rows in `columns` column pairs (#btKvKey / #btKvValue labels, reused across

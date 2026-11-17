@@ -152,7 +152,7 @@ void HDXDataPanel::build_ui() {
     title_lbl_ = new QLabel(tr("HDX HUMANITARIAN DATA"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                                   .arg(ui::colors::CYAN())
-                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::TINY.get())
                                   .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
 
@@ -171,7 +171,7 @@ void HDXDataPanel::build_ui() {
                                    "font-weight:400; }"
                                    "QPushButton:hover { color:%4; background:%5; }")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::TINY.get())
                                .arg(ui::fonts::DATA_FAMILY)
                                .arg(ui::colors::CYAN())
                                .arg(cyan_wash(0.04)));
@@ -191,7 +191,7 @@ void HDXDataPanel::build_ui() {
                                         "QLineEdit:focus { border-color:%6; }")
                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
-                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::SMALL.get())
                                     .arg(ui::colors::CYAN()));
     connect(search_edit_, &QLineEdit::returnPressed, this, [this]() {
         auto q = search_edit_->text().trimmed();
@@ -212,7 +212,7 @@ void HDXDataPanel::build_ui() {
     dataset_count_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
                                           "background:%4; border:1px solid %5; font-weight:700;")
                                       .arg(ui::colors::CYAN())
-                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::TINY.get())
                                       .arg(ui::fonts::DATA_FAMILY())
                                       .arg(cyan_wash(0.08))
                                       .arg(cyan_wash(0.25)));
@@ -228,7 +228,7 @@ void HDXDataPanel::build_ui() {
                                       .arg(ui::colors::CYAN())
                                       .arg(cyan_wash(0.4))
                                       .arg(ui::fonts::DATA_FAMILY())
-                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::TINY.get())
                                       .arg(cyan_wash(0.08)));
     load_more_btn_->hide();
     connect(load_more_btn_, &QPushButton::clicked, this, [this]() {
@@ -275,7 +275,7 @@ void HDXDataPanel::build_ui() {
                 "QTableWidget::item:alternate { background:%9; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
+            .arg(ui::fonts::SMALL.get())
             .arg(cyan_wash(0.15))
             .arg(ui::colors::BG_RAISED())
             .arg(ui::colors::TEXT_SECONDARY())
@@ -331,11 +331,11 @@ void HDXDataPanel::build_ui() {
                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL);
+                           .arg(ui::fonts::SMALL.get());
 
     auto bar_label_style = QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::TINY.get())
                                .arg(ui::fonts::DATA_FAMILY);
 
     country_lbl_ = new QLabel(tr("COUNTRY:"), explorer_bar_);
@@ -372,7 +372,7 @@ void HDXDataPanel::build_ui() {
                                     .arg(ui::colors::CYAN())
                                     .arg(ui::colors::TEXT_ON_ACCENT())
                                     .arg(ui::fonts::DATA_FAMILY())
-                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::SMALL.get())
                                     .arg(cyan_wash(0.85)));
     connect(explore_btn_, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
@@ -405,7 +405,7 @@ void HDXDataPanel::build_ui() {
     attribution_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:4px 16px;"
                                             "background:%4; border-top:1px solid %5;")
                                         .arg(ui::colors::TEXT_TERTIARY())
-                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::TINY.get())
                                         .arg(ui::fonts::DATA_FAMILY())
                                         .arg(ui::colors::BG_SURFACE())
                                         .arg(ui::colors::BORDER_DIM()));
@@ -434,7 +434,7 @@ void HDXDataPanel::set_active_view(int index) {
                         "background:%4; font-weight:700; }"
                         "QPushButton:hover { background:%5; }")
                     .arg(ui::colors::CYAN())
-                    .arg(ui::fonts::TINY)
+                    .arg(ui::fonts::TINY.get())
                     .arg(ui::fonts::DATA_FAMILY)
                     .arg(cyan_wash(0.06))
                     .arg(cyan_wash(0.10)));
@@ -444,7 +444,7 @@ void HDXDataPanel::set_active_view(int index) {
                                                     "font-weight:400; }"
                                                     "QPushButton:hover { color:%4; background:%5; }")
                                                 .arg(ui::colors::TEXT_SECONDARY())
-                                                .arg(ui::fonts::TINY)
+                                                .arg(ui::fonts::TINY.get())
                                                 .arg(ui::fonts::DATA_FAMILY)
                                                 .arg(ui::colors::CYAN())
                                                 .arg(cyan_wash(0.04)));

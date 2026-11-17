@@ -142,7 +142,7 @@ QWidget* QuantModulePanel::build_hft_panel() {
     // of them, and it runs on first show (public exchange data, no key; a result older than a
     // minute is refreshed on the next visit). Each section's own button refreshes its section.
     auto* tabs = make_view_tabs(w);
-    auto hft_spec = [this](const QString& key) {
+    auto hft_spec = [](const QString& key) {
         ViewSpec s;
         s.key = key;
         s.cost = ViewCost::Fetch;

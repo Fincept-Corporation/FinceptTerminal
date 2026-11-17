@@ -26,7 +26,7 @@ struct DataSource {
     /// secret fields of `config` are blank because they are unknown. save() then keeps the
     /// stored copy (or refuses to replace it) instead of treating the blanks as cleared.
     bool secrets_unreadable = false;
-    QString secrets_error;    ///< plain reason, completing "Could not read secure storage: …"
+    QString secrets_error{};  ///< plain reason, completing "Could not read secure storage: …"
 };
 
 class DataSourceRepository : public BaseRepository<DataSource> {

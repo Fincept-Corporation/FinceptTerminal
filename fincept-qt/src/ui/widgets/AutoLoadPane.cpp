@@ -1053,7 +1053,7 @@ void AutoLoadPane::start_read(const QString& key, const QString& pkey) {
         watcher->deleteLater();
         on_read_done(key, gen, read, pkey);
     });
-    watcher->setFuture(QtConcurrent::run([pkey, ceiling]() {
+    watcher->setFuture(QtConcurrent::run([pkey, ceiling = ceiling]() {
         // A pool thread: CacheDatabase gives it its own connection (per-thread clone).
         const std::optional<QString> text = CacheManager::instance().try_get(pkey);
         return text ? autoload::parse_remembered(*text, ceiling) : autoload::RememberedRead{};

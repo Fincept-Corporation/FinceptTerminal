@@ -45,7 +45,7 @@ bool ksp_is_float(int t) {
     return t == QMetaType::Double || t == QMetaType::Float || t == QMetaType::Float16;
 }
 
-bool ksp_is_date(int t) {
+[[maybe_unused]] bool ksp_is_date(int t) {
     return t == QMetaType::QDate || t == QMetaType::QDateTime || t == QMetaType::QTime;
 }
 

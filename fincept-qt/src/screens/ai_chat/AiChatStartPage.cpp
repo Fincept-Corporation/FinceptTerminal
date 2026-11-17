@@ -359,7 +359,7 @@ void AicStartPage::reflow(int width) {
     const int avail = std::min(std::max(0, width - style::u(2)), body_max_width()) - 2 * style::u(6);
     const int card_min = 24 * style::avg_char(0);
     const int gap = style::u(4);
-    auto fits = [avail, card_min, gap](int n) { return avail >= n * card_min + (n - 1) * gap; };
+    auto fits = [avail, card_min, gap = gap](int n) { return avail >= n * card_min + (n - 1) * gap; };
     int cols = fits(5) ? 5 : fits(3) ? 3 : fits(2) ? 2 : 1;
     cols = std::min(cols, int(group_cols_.size()));
     if (cols == columns_)

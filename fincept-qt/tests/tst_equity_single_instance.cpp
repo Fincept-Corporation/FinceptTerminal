@@ -33,7 +33,7 @@ bool g_window_recreated = false; // the window is re-created once: the first tex
 struct FakeRouter {
     QWidget* host = nullptr;
     QWidget* recorded = nullptr;
-    std::function<QWidget*(QWidget*)> factory;
+    std::function<QWidget*(QWidget*)> factory{};
     int factory_calls = 0;
 
     void materialize() {

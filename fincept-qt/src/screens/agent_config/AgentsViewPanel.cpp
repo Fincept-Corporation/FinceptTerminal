@@ -171,7 +171,7 @@ QString n2(double v) {
 QString pct_signed(double v) {
     return fmtx::pct(v, 2, true);
 }
-QString pct_plain(double v) {
+[[maybe_unused]] QString pct_plain(double v) {
     return fmtx::pct(v, 1, false);
 }
 

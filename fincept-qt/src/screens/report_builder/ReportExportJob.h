@@ -65,7 +65,13 @@ class ReportExportJob : public QObject {
     using Done = std::function<void(bool ok, bool cancelled, const QString& path, const QString& error)>;
     /// Create, start and self-delete a job; `done` runs once on the GUI thread.
     static ReportExportJob* run(Format format, const QString& path, const report::ReportDocument& doc,
-                                QObject* parent, Done done, const Options& options = {});
+                                QObject* parent, Done done, const Options& options);
+    /// The same with default options. An overload, not `= {}`: GCC and clang reject a default
+    /// argument that needs Options' member initializers inside the enclosing class.
+    static ReportExportJob* run(Format format, const QString& path, const report::ReportDocument& doc,
+                                QObject* parent, Done done) {
+        return run(format, path, doc, parent, std::move(done), Options());
+    }
 
   signals:
     /// `text` says what is happening ("Writing page 4 of 22"); `percent` 0..100.

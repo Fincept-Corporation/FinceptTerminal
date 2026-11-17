@@ -52,7 +52,7 @@ static QString combo_style() {
                    "selection-background-color:%7; border:1px solid %3; }")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
         .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL)
+        .arg(ui::fonts::SMALL.get())
         .arg(ui::colors::WARNING())
         .arg(ui::colors::alpha(ui::colors::WARNING, 0.15));
 }
@@ -65,7 +65,7 @@ static QString run_button_style() {
         .arg(ui::colors::WARNING())
         .arg(ui::colors::TEXT_ON_ACCENT())
         .arg(ui::fonts::DATA_FAMILY())
-        .arg(ui::fonts::SMALL)
+        .arg(ui::fonts::SMALL.get())
         .arg(ui::colors::alpha(ui::colors::WARNING, 0.85));
 }
 
@@ -75,7 +75,7 @@ static QString spin_style() {
                    "QDoubleSpinBox:focus { border-color:%6; }")
         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
         .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL)
+        .arg(ui::fonts::SMALL.get())
         .arg(ui::colors::WARNING());
 }
 
@@ -112,7 +112,7 @@ static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* p
     auto* lbl = new QLabel(label_text, group);
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                            .arg(ui::colors::TEXT_SECONDARY())
-                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::TINY.get())
                            .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(lbl);
 
@@ -123,7 +123,7 @@ static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* p
         auto* h = new QLabel(hint, group);
         h->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                              .arg(ui::colors::TEXT_TERTIARY())
-                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::TINY.get())
                              .arg(ui::fonts::DATA_FAMILY));
         h->setWordWrap(true);
         vl->addWidget(h);
@@ -163,7 +163,7 @@ void TradeAnalysisPanel::build_ui() {
     title_lbl_ = new QLabel(tr("TRADE GEOPOLITICS ANALYSIS"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                                   .arg(ui::colors::WARNING())
-                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::TINY.get())
                                   .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
     hhl->addStretch();
@@ -171,7 +171,7 @@ void TradeAnalysisPanel::build_ui() {
     status_label_ = new QLabel(header);
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                      .arg(ui::colors::TEXT_SECONDARY())
-                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::fonts::SMALL.get())
                                      .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(status_label_);
     root->addWidget(header);
@@ -216,7 +216,7 @@ void TradeAnalysisPanel::build_ui() {
                              .arg(ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(), ui::colors::BG_RAISED())
                              .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::fonts::SMALL)
+                             .arg(ui::fonts::SMALL.get())
                              .arg(ui::colors::WARNING()));
     tabs_->setUsesScrollButtons(true);
 
@@ -244,7 +244,7 @@ void TradeAnalysisPanel::build_ui() {
         hint->setWordWrap(true);
         hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                 .arg(ui::colors::TEXT_SECONDARY())
-                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::SMALL.get())
                                 .arg(ui::fonts::DATA_FAMILY));
         i18n_labels_.append({hint, QString::fromUtf8(hint_src)});
         pl->addWidget(hint);
@@ -581,7 +581,7 @@ void TradeAnalysisPanel::display_result(const QString& context, const QJsonObjec
     hdr->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                "letter-spacing:1px; padding:8px 0 4px 0;")
                            .arg(ui::colors::WARNING())
-                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::TINY.get())
                            .arg(ui::fonts::DATA_FAMILY()));
     results_layout_->addWidget(hdr);
 
@@ -742,7 +742,7 @@ void TradeAnalysisPanel::display_result(const QString& context, const QJsonObjec
                                    "QPushButton:checked, QPushButton:hover { color:%5; border-color:%5; }")
                                .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED())
                                .arg(ui::fonts::DATA_FAMILY())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::SMALL.get())
                                .arg(ui::colors::WARNING()));
     auto* raw = new QPlainTextEdit(results_container_);
     raw->setReadOnly(true);
@@ -752,7 +752,7 @@ void TradeAnalysisPanel::display_result(const QString& context, const QJsonObjec
                                "font-family:%4; font-size:%5px; }")
                            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
                            .arg(ui::fonts::DATA_FAMILY())
-                           .arg(ui::fonts::SMALL));
+                           .arg(ui::fonts::SMALL.get()));
     raw->hide();
     connect(raw_btn, &QPushButton::toggled, raw, &QWidget::setVisible);
     connect(raw_btn, &QPushButton::toggled, raw_btn,

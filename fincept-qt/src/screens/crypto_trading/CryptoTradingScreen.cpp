@@ -236,7 +236,7 @@ void CryptoTradingScreen::setup_ui() {
                                      "QListView::item:selected { background:%6; color:%2; }")
                                  .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
                                       fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
-                                 .arg(fincept::ui::fonts::SMALL)
+                                 .arg(fincept::ui::fonts::SMALL.get())
                                  .arg(fincept::ui::colors::BG_HOVER()));
     }
     connect(completer, QOverload<const QString&>::of(&QCompleter::activated), this,

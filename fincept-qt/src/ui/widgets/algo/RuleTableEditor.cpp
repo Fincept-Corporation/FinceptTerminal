@@ -566,7 +566,7 @@ void RuleTableEditor::refresh_row_widgets(Row* r) {
     const QStringList rkey = r->rhs->currentData().toString().split(QLatin1Char('|'));
     const svc::IndicatorDef* ldef = rte_find(lkey.value(0));
     const svc::IndicatorDef* rdef = rhs_value ? nullptr : rte_find(rkey.value(0));
-    auto param_tip = [this](const svc::IndicatorDef* d) {
+    auto param_tip = [](const svc::IndicatorDef* d) {
         if (!d || d->params.isEmpty())
             return QString();
         QStringList names;

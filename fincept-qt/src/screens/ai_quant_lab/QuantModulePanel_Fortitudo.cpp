@@ -774,7 +774,7 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
         results_layout_->addWidget(hdr);
 
-        const auto point_label = [this](int idx) {
+        const auto point_label = [](int idx) {
             return idx >= 0 ? tr("Point #%1").arg(idx + 1) : QString::fromUtf8("—");
         };
         QList<QWidget*> top = {

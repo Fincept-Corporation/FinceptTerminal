@@ -77,7 +77,7 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     auto* tabs = make_view_tabs(w);
     // The two model views need a trained model: Heavy (a designed preview) until its id is known —
     // prefilled from the last model Model Library trained — then they run on first show.
-    auto ls_model_spec = [this](const QString& key, bool dataset, const QString& title, const QString& returns,
+    auto ls_model_spec = [](const QString& key, bool dataset, const QString& title, const QString& returns,
                                 const QString& run_text) {
         ViewSpec s;
         s.key = key;

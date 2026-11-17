@@ -229,7 +229,7 @@ void GeopoliticsScreen::refresh_theme() {
                           " padding:0 8px; font-size:%3px; font-weight:700; font-family:%4; }"
                           "QPushButton#geoAutoBtn:checked { color:%6; border-color:%6; }")
                       .arg(ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY())
-                      .arg(ui::fonts::TINY)
+                      .arg(ui::fonts::TINY.get())
                       .arg(ui::fonts::DATA_FAMILY(), ui::colors::SUCCESS(), ui::colors::WARNING(),
                            ui::colors::DANGER(), ui::colors::TEXT_ON_ACCENT(), ui::colors::TEXT_SECONDARY(),
                            ui::colors::BORDER_DIM()));
@@ -478,7 +478,7 @@ QWidget* GeopoliticsScreen::build_top_bar() {
                                    "background:transparent; font-weight:400; }"
                                    "QPushButton:hover { color:%4; background:%5; }")
                                .arg(ui::colors::TEXT_SECONDARY())
-                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::TINY.get())
                                .arg(ui::fonts::DATA_FAMILY)
                                .arg(tabs[i].color)
                                .arg(ui::colors::alpha(QColor(tabs[i].color), 0.06)));
@@ -492,7 +492,7 @@ QWidget* GeopoliticsScreen::build_top_bar() {
     clock_label_ = new QLabel(tr("UTC --:--"), bar);
     clock_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; min-width:68px;")
                                     .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(ui::fonts::TINY)
+                                    .arg(ui::fonts::TINY.get())
                                     .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(clock_label_);
 
@@ -513,7 +513,7 @@ QWidget* GeopoliticsScreen::build_top_bar() {
         QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
                 "background:%4; border:1px solid %5; font-weight:700;")
             .arg(ui::colors::DANGER())
-            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::TINY.get())
             .arg(ui::fonts::DATA_FAMILY())
             .arg(ui::colors::alpha(ui::colors::DANGER, 0.08))
             .arg(ui::colors::alpha(ui::colors::DANGER, 0.25)));
@@ -539,7 +539,7 @@ QWidget* GeopoliticsScreen::build_filter_panel(QWidget* parent) {
     filters_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                           "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %4;")
                                       .arg(ui::colors::DANGER())
-                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::TINY.get())
                                       .arg(ui::fonts::DATA_FAMILY())
                                       .arg(ui::colors::BORDER_DIM()));
     vl->addWidget(filters_title_);
@@ -549,12 +549,12 @@ QWidget* GeopoliticsScreen::build_filter_panel(QWidget* parent) {
                                "QLineEdit:focus, QComboBox:focus { border-color:%6; }")
                            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                            .arg(ui::fonts::DATA_FAMILY())
-                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::SMALL.get())
                            .arg(ui::colors::DANGER());
 
     auto label_style = QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                            .arg(ui::colors::TEXT_SECONDARY())
-                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::TINY.get())
                            .arg(ui::fonts::DATA_FAMILY);
 
     country_lbl_ = new QLabel(tr("COUNTRY"), panel);
@@ -615,7 +615,7 @@ QWidget* GeopoliticsScreen::build_filter_panel(QWidget* parent) {
                                   .arg(ui::colors::DANGER())
                                   .arg(ui::colors::TEXT_ON_ACCENT())
                                   .arg(ui::fonts::DATA_FAMILY())
-                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::fonts::SMALL.get())
                                   .arg(ui::colors::alpha(ui::colors::DANGER, 0.85)));
     connect(apply_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_apply_filters);
     vl->addWidget(apply_btn_);
@@ -627,7 +627,7 @@ QWidget* GeopoliticsScreen::build_filter_panel(QWidget* parent) {
                                       "QPushButton:hover { background:%5; }")
                                   .arg(ui::colors::TEXT_SECONDARY())
                                   .arg(ui::fonts::DATA_FAMILY)
-                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::fonts::SMALL.get())
                                   .arg(ui::colors::BORDER_DIM())
                                   .arg(ui::colors::BG_HOVER()));
     connect(clear_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_clear_filters);
@@ -644,7 +644,7 @@ QWidget* GeopoliticsScreen::build_filter_panel(QWidget* parent) {
     legend_title_->setStyleSheet(
         QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
             .arg(ui::colors::TEXT_TERTIARY())
-            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::TINY.get())
             .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(legend_title_);
 
@@ -688,11 +688,11 @@ QWidget* GeopoliticsScreen::build_status_bar() {
 
     auto s = QString("color:%1; font-size:%2px; font-family:%3;")
                  .arg(ui::colors::TEXT_SECONDARY())
-                 .arg(ui::fonts::TINY)
+                 .arg(ui::fonts::TINY.get())
                  .arg(ui::fonts::DATA_FAMILY);
     auto sv = QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                   .arg(ui::colors::TEXT_PRIMARY())
-                  .arg(ui::fonts::TINY)
+                  .arg(ui::fonts::TINY.get())
                   .arg(ui::fonts::DATA_FAMILY);
 
     status_source_lbl_ = new QLabel(tr("SOURCE:"), bar);
@@ -709,7 +709,7 @@ QWidget* GeopoliticsScreen::build_status_bar() {
     status_engine_val_ = new QLabel("PYTHON + C++", bar);
     status_engine_val_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                           .arg(ui::colors::SUCCESS())
-                                          .arg(ui::fonts::TINY)
+                                          .arg(ui::fonts::TINY.get())
                                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_engine_lbl_);
     hl->addWidget(status_engine_val_);
@@ -725,7 +725,7 @@ QWidget* GeopoliticsScreen::build_status_bar() {
                                  "QPushButton:disabled { color:%6; border-color:%6; }"
                                  "QLabel { color:%1; font-size:%3px; font-family:%4; font-weight:700; }")
                              .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
-                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::TINY.get())
                              .arg(ui::fonts::DATA_FAMILY())
                              .arg(ui::colors::DANGER(), ui::colors::TEXT_TERTIARY()));
     auto* pl = new QHBoxLayout(pager);
@@ -965,7 +965,7 @@ void GeopoliticsScreen::render_events_payload(const QJsonValue& payload, const Q
         QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
                 "background:%4; border:1px solid %5; font-weight:700;")
             .arg(color)
-            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::TINY.get())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::colors::alpha(clr, 0.08))
             .arg(ui::colors::alpha(clr, 0.25)));
@@ -1092,7 +1092,7 @@ void GeopoliticsScreen::set_status_color(const QString& color) {
         return;
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                      .arg(color)
-                                     .arg(ui::fonts::TINY)
+                                     .arg(ui::fonts::TINY.get())
                                      .arg(ui::fonts::DATA_FAMILY));
 }
 
@@ -1132,7 +1132,7 @@ void GeopoliticsScreen::on_tab_changed(int index) {
                         "background:%4; font-weight:700; }"
                         "QPushButton:hover { background:%5; }")
                     .arg(colors[i])
-                    .arg(ui::fonts::TINY)
+                    .arg(ui::fonts::TINY.get())
                     .arg(ui::fonts::DATA_FAMILY)
                     .arg(ui::colors::alpha(c, 0.06))
                     .arg(ui::colors::alpha(c, 0.10)));
@@ -1142,7 +1142,7 @@ void GeopoliticsScreen::on_tab_changed(int index) {
                                                    "background:transparent; font-weight:400; }"
                                                    "QPushButton:hover { color:%4; background:%5; }")
                                                .arg(ui::colors::TEXT_SECONDARY())
-                                               .arg(ui::fonts::TINY)
+                                               .arg(ui::fonts::TINY.get())
                                                .arg(ui::fonts::DATA_FAMILY)
                                                .arg(colors[i])
                                                .arg(ui::colors::alpha(c, 0.06)));
@@ -1279,7 +1279,7 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
             if (lb)
                 lb->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:transparent;%4")
                                       .arg(hidden ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_SECONDARY())
-                                      .arg(ui::fonts::SMALL)
+                                      .arg(ui::fonts::SMALL.get())
                                       .arg(ui::fonts::DATA_FAMILY())
                                       .arg(hidden ? QStringLiteral(" text-decoration:line-through;") : QString()));
             row->setToolTip(hidden ? tr("Hidden on the map — click to show these events again")
@@ -1324,7 +1324,7 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
                                        "background:%4; border:1px solid %5;"
                                        "padding:1px 5px;")
                                    .arg(col_hex)
-                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::TINY.get())
                                    .arg(ui::fonts::DATA_FAMILY())
                                    .arg(ui::colors::tint(cat_col, 0.10))
                                    .arg(ui::colors::tint(cat_col, 0.30)));

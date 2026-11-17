@@ -392,7 +392,7 @@ QWidget* EquityResearchScreen::build_title_bar() {
                 "QPushButton#erSell { color:%11; border:1px solid %11; } QPushButton#erSell:hover { background:%11; color:%12; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
                  ui::colors::AMBER(), ui::colors::AMBER_DIM())
-            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::TINY.get())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE(),
                  ui::colors::TEXT_ON_ACCENT()));

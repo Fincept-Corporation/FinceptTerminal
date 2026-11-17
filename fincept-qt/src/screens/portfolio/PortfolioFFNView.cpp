@@ -340,7 +340,7 @@ void PortfolioFFNView::build_ui() {
     {
         new_tab(overview_tab_, pages, static_cast<int>(ui::LoadingSkeleton::Shape::Result),
                 [this]() { update_overview(); });
-        overview_tab_.empty_text = [this]() {
+        overview_tab_.empty_text = []() {
             return tr("Annualised return, volatility, Sharpe ratio and drawdown of the current weights appear once "
                       "the portfolio holds a position.");
         };
@@ -395,7 +395,7 @@ void PortfolioFFNView::build_ui() {
         new_tab(benchmark_tab_, page, static_cast<int>(ui::LoadingSkeleton::Shape::Table),
                 [this]() { update_benchmark(); });
         benchmark_tab_.pane->skeleton()->set_row_count(5);
-        benchmark_tab_.empty_text = [this]() {
+        benchmark_tab_.empty_text = []() {
             return tr("The current weights' return, volatility and Sharpe ratio next to the benchmark appear once the "
                       "portfolio holds a position.");
         };
@@ -420,7 +420,7 @@ void PortfolioFFNView::build_ui() {
     {
         new_tab(optimization_tab_, pages, static_cast<int>(ui::LoadingSkeleton::Shape::Result),
                 [this]() { update_optimization(); });
-        optimization_tab_.empty_text = [this]() {
+        optimization_tab_.empty_text = []() {
             return tr("Equal-risk, inverse-volatility and equal weights compared with the current mix appear once the "
                       "portfolio holds a position.");
         };
@@ -470,7 +470,7 @@ void PortfolioFFNView::build_ui() {
     {
         new_tab(rebased_tab_, pages, static_cast<int>(ui::LoadingSkeleton::Shape::Chart),
                 [this]() { update_rebased(); });
-        rebased_tab_.empty_text = [this]() {
+        rebased_tab_.empty_text = []() {
             return tr("Every holding on a common base of 100 appears once the portfolio holds a position.");
         };
         rebased_chart_ = ffn_time_chart(rebased_tab_.pane->content_parent(), QStringLiteral("ffn_rebased"));
@@ -485,7 +485,7 @@ void PortfolioFFNView::build_ui() {
     {
         new_tab(drawdowns_tab_, pages, static_cast<int>(ui::LoadingSkeleton::Shape::Chart),
                 [this]() { update_drawdowns(); });
-        drawdowns_tab_.empty_text = [this]() {
+        drawdowns_tab_.empty_text = []() {
             return tr("The historical drawdowns of each holding appear once the portfolio holds a position.");
         };
         drawdowns_chart_ = ffn_time_chart(drawdowns_tab_.pane->content_parent(), QStringLiteral("ffn_drawdowns"));
@@ -501,7 +501,7 @@ void PortfolioFFNView::build_ui() {
     {
         new_tab(rolling_tab_, pages, static_cast<int>(ui::LoadingSkeleton::Shape::Chart),
                 [this]() { update_rolling(); });
-        rolling_tab_.empty_text = [this]() {
+        rolling_tab_.empty_text = []() {
             return tr("60-day rolling correlations between the holdings appear once the portfolio holds two or more "
                       "positions.");
         };

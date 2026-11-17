@@ -1465,7 +1465,7 @@ void QuantLibScreen::flash_status(const QString& text) {
         return;
     status_left_->setText(text);
     QPointer<QLabel> label = status_left_;
-    QTimer::singleShot(8000, this, [this, label, text]() {
+    QTimer::singleShot(8000, this, [label, text]() {
         if (label && label->text() == text)
             label->setText(tr("QUANTLIB SUITE"));
     });

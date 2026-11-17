@@ -145,7 +145,7 @@ bool ldg_valid_ccy(const QString& c) {
            std::all_of(c.begin(), c.end(), [](QChar ch) { return ch.isLetter(); });
 }
 
-QString ldg_fx_text(double v) {
+[[maybe_unused]] QString ldg_fx_text(double v) {
     ui::formatting::InstrumentFmt fx;
     fx.fx = true;
     return ui::formatting::price(v, fx);

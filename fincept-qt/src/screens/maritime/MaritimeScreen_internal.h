@@ -99,7 +99,7 @@ inline QString maritime_root_ss() {
                   "padding:5px 8px; border:none; border-bottom:1px solid %11;"
                   "font-family:%4; font-size:%5px; letter-spacing:0.5px; }")
               .arg(C(colors::BG_BASE), C(colors::TEXT_PRIMARY), C(colors::BG_RAISED), f)
-              .arg(fonts::SMALL)
+              .arg(fonts::SMALL.get())
               .arg(C(colors::BG_HOVER), C(colors::AMBER), C(colors::ROW_ALT), C(colors::BG_RAISED),
                    C(colors::TEXT_SECONDARY), C(colors::BORDER_MED));
     ss += QString("QLineEdit, QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
@@ -115,7 +115,7 @@ inline QString maritime_root_ss() {
                   "QComboBox QAbstractItemView { background:%7; color:%2; border:1px solid %3;"
                   "selection-background-color:%8; selection-color:%6; outline:0; font-family:%4; font-size:%5px; }")
               .arg(C(colors::BG_SURFACE), C(colors::TEXT_PRIMARY), C(colors::BORDER_MED), f)
-              .arg(fonts::SMALL)
+              .arg(fonts::SMALL.get())
               .arg(C(colors::AMBER), C(colors::BG_RAISED), C(colors::BG_HOVER));
     // ── Buttons by role ─────────────────────────────────────────────────────
     ss += QString("QPushButton[mtRole=\"primary\"], QPushButton#mtPlansBtn { background:%1; color:%2; font-family:%3;"
@@ -130,7 +130,7 @@ inline QString maritime_root_ss() {
                   " font-family:%3; font-size:%4px; font-weight:700; padding:3px 8px; }"
                   "QPushButton[mtRole=\"toolbar\"]:hover, QPushButton[mtRole=\"toolbar\"]:checked { color:%1; }")
               .arg(C(colors::AMBER), C(colors::TEXT_ON_ACCENT), f)
-              .arg(fonts::SMALL)
+              .arg(fonts::SMALL.get())
               .arg(C(colors::AMBER_DIM), C(colors::TEXT_SECONDARY), C(colors::BORDER_BRIGHT), C(colors::BG_HOVER));
     // ── Labels by role / name ───────────────────────────────────────────────
     ss += QString("QLabel#mtBrand { color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:2px; }"
@@ -155,9 +155,9 @@ inline QString maritime_root_ss() {
                   "QLabel#mtNotFound { color:%1; font-size:" + fincept::ui::fonts::px(-3) + "px; font-family:%3; padding:6px; border:1px solid %7;"
                   " background:%6; border-radius:2px; }")
               .arg(C(colors::AMBER))
-              .arg(fonts::DATA)
+              .arg(fonts::DATA.get())
               .arg(f)
-              .arg(fonts::TINY)
+              .arg(fonts::TINY.get())
               .arg(C(colors::TEXT_SECONDARY), C(colors::BG_SURFACE), C(colors::BORDER_MED), C(colors::BORDER_DIM),
                    C(colors::TEXT_PRIMARY), C(colors::TEXT_TERTIARY), C(colors::DANGER));
     // ── State tones (last, so they win over the role colours above) ─────────
@@ -179,7 +179,7 @@ inline QString maritime_popup_ss() {
     return QString("background:%1; color:%2; border:1px solid %3; font-family:%4; font-size:%5px; outline:0;"
                    "selection-background-color:%6; selection-color:%7;")
         .arg(C(colors::BG_RAISED), C(colors::TEXT_PRIMARY), C(colors::BORDER_MED), F(fonts::DATA_FAMILY))
-        .arg(fonts::SMALL)
+        .arg(fonts::SMALL.get())
         .arg(C(colors::BG_HOVER), C(colors::AMBER));
 }
 

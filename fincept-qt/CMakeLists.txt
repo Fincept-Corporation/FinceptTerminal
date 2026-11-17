@@ -341,6 +341,15 @@ endif()
 # -Werror only in CI so local iteration isn't blocked.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
+    # `{.title = x, .ink = y}`: leaving the other fields to their defaults is the point of a
+    # designated initializer. Clang 19+ (AppleClang 17) warns about every omitted field under
+    # -Wextra; GCC and MSVC do not. Positional initializers are still checked
+    # (-Wmissing-field-initializers stays on).
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-Wno-missing-designated-field-initializers FINCEPT_HAS_WNO_MISSING_DESIGNATED_FIELD_INIT)
+    if(FINCEPT_HAS_WNO_MISSING_DESIGNATED_FIELD_INIT AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-Wno-missing-designated-field-initializers)
+    endif()
     if(DEFINED ENV{CI})
         add_compile_options(-Werror)
     endif()
@@ -3363,6 +3372,23 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
+# Resource files are compiled by an explicit rcc rule, one source each, outside the unity
+# batches. Every compiled .qrc defines the same file-local names (qt_resource_data,
+# qt_resource_name, qt_resource_struct). AUTORCC kept them apart on single-config generators
+# only: with Visual Studio / Xcode it compiles them through per-config wrapper sources that
+# are batched like any other file, and two in one batch do not compile (MSVC C2374 - the
+# 4.5.3 Windows release build). That could not happen with one .qrc; there are three now.
+set(_FINCEPT_QRC_FILES
+    resources/vader/vader.qrc
+    resources/fonts/fonts.qrc
+    resources/maps/maps.qrc
+)
+set_source_files_properties(${_FINCEPT_QRC_FILES} PROPERTIES SKIP_AUTORCC ON)
+qt6_add_resources(_FINCEPT_QRC_SOURCES ${_FINCEPT_QRC_FILES})
+set_source_files_properties(${_FINCEPT_QRC_SOURCES}
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON SKIP_AUTOGEN ON SKIP_PRECOMPILE_HEADERS ON
+)
+
 # ADS files use anonymous namespaces and heavy Qt meta-object includes —
 # exclude from unity to avoid ODR / symbol clashes in large batches
 set_source_files_properties(
@@ -3926,6 +3952,7 @@ else()
 endif()
 
 add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
+    ${_FINCEPT_QRC_SOURCES}
     ${CORE_SOURCES}
     ${NETWORK_SOURCES}
     ${DATAHUB_SOURCES}

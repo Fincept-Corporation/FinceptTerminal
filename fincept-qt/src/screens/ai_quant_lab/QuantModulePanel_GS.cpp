@@ -529,7 +529,7 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         const QJsonValue calmar = d.value("calmar_ratio");
         const QJsonValue mdd_v = d.value("max_drawdown");
         const double mdd = mdd_v.toDouble();
-        const auto days = [this](const QJsonValue& v) {
+        const auto days = [](const QJsonValue& v) {
             return v.isDouble() ? tr("%1 days").arg(v.toInt()) : QString::fromUtf8("—");
         };
 

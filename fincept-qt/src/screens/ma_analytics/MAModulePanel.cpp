@@ -65,7 +65,7 @@ QDoubleSpinBox* MAModulePanel::make_double_spin(double min, double max, double v
                                 "QDoubleSpinBox:focus { border-color:%6; }")
                             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                             .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL)
+                            .arg(ui::fonts::SMALL.get())
                             .arg(ui::colors::legible(module_.color)));
     return spin;
 }
@@ -79,7 +79,7 @@ QSpinBox* MAModulePanel::make_int_spin(int min, int max, int val, QWidget* paren
                                 "QSpinBox:focus { border-color:%6; }")
                             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                             .arg(ui::fonts::DATA_FAMILY)
-                            .arg(ui::fonts::SMALL)
+                            .arg(ui::fonts::SMALL.get())
                             .arg(ui::colors::legible(module_.color)));
     return spin;
 }
@@ -96,7 +96,7 @@ QPushButton* MAModulePanel::make_run_button(const QString& text, QWidget* parent
                            .arg(ui::colors::legible(module_.color))
                            .arg(ui::colors::TEXT_ON_ACCENT())
                            .arg(ui::fonts::DATA_FAMILY)
-                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::SMALL.get())
                            .arg(ui::colors::legible(module_.color.lighter(115)))
                            .arg(ui::colors::legible(module_.color.darker(115)))
                            .arg(ui::colors::BG_RAISED())
@@ -127,7 +127,7 @@ QWidget* MAModulePanel::build_input_row(const QString& label, QWidget* input, QW
     }
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                            .arg(ui::colors::TEXT_SECONDARY())
-                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::SMALL.get())
                            .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
@@ -1158,7 +1158,7 @@ void MAModulePanel::apply_tab_stylesheet() {
                                  .arg(ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(), ui::colors::BG_RAISED())
                                  .arg(ui::colors::TEXT_SECONDARY())
                                  .arg(ui::fonts::DATA_FAMILY())
-                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::fonts::SMALL.get())
                                  .arg(ui::colors::legible(module_.color)));
 }
 
@@ -1174,7 +1174,7 @@ void MAModulePanel::refresh_theme() {
         header_title_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                 .arg(ui::colors::legible(module_.color))
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::TINY.get())
                 .arg(ui::fonts::DATA_FAMILY()));
 
     // Header divider
@@ -1188,14 +1188,14 @@ void MAModulePanel::refresh_theme() {
     if (header_category_)
         header_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                             .arg(ui::colors::TEXT_SECONDARY())
-                                            .arg(ui::fonts::TINY)
+                                            .arg(ui::fonts::TINY.get())
                                             .arg(ui::fonts::DATA_FAMILY()));
 
     // Status label
     if (status_label_)
         status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                          .arg(ui::colors::TEXT_SECONDARY())
-                                         .arg(ui::fonts::TINY)
+                                         .arg(ui::fonts::TINY.get())
                                          .arg(ui::fonts::DATA_FAMILY()));
 
     // Tab widget

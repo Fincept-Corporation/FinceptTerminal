@@ -533,7 +533,7 @@ void QuantModulePanel::fetch_series(quint64 pane_id, const QString& view,
             if (job->waiting.isEmpty())
                 finish(QString());
         });
-        hub.subscribe_errors(owner, topic, [this, job, sym, topic, finish](const QString& err) {
+        hub.subscribe_errors(owner, topic, [job, sym, topic, finish](const QString& err) {
             if (job->done || job->bars.contains(sym))
                 return;
             // Past daily closes do not change: an older copy in the hub still serves.
@@ -555,7 +555,7 @@ void QuantModulePanel::fetch_series(quint64 pane_id, const QString& view,
         return;
     }
     hub.request(to_request);
-    QTimer::singleShot(kSeriesFetchTimeoutMs, owner, [this, job, finish]() {
+    QTimer::singleShot(kSeriesFetchTimeoutMs, owner, [job, finish]() {
         finish(tr("No answer from the price source for %1 within %2 s — check the connection and press RETRY.")
                    .arg(job->waiting.join(QStringLiteral(", ")))
                    .arg(kSeriesFetchTimeoutMs / 1000));

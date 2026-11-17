@@ -438,7 +438,7 @@ void MAAnalyticsScreen::update_sidebar_selection() {
                                                   "border-left:2px solid %8; }")
                                               .arg(active ? fg.name() : "transparent")
                                               .arg(active ? fg.name() : ui::colors::TEXT_SECONDARY())
-                                              .arg(ui::fonts::SMALL)
+                                              .arg(ui::fonts::SMALL.get())
                                               .arg(ui::fonts::DATA_FAMILY)
                                               .arg(active ? "700" : "400")
                                               .arg(active ? ui::colors::alpha(fg, 0.08) : "transparent")
@@ -456,7 +456,7 @@ void MAAnalyticsScreen::update_sidebar_selection() {
                                                  "background:%5; font-weight:%6; }"
                                                  "QPushButton:hover { background:%7; color:%8; }")
                                              .arg(active ? fg.name() : ui::colors::TEXT_SECONDARY())
-                                             .arg(ui::fonts::TINY)
+                                             .arg(ui::fonts::TINY.get())
                                              .arg(ui::fonts::DATA_FAMILY)
                                              .arg(active ? ui::colors::alpha(fg, 0.3) : "transparent")
                                              .arg(active ? ui::colors::alpha(fg, 0.12) : "transparent")
@@ -473,12 +473,12 @@ void MAAnalyticsScreen::update_right_panel() {
     right_title_->setText(mod.label.toUpper());
     right_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                     .arg(fg.name())
-                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::SMALL.get())
                                     .arg(ui::fonts::DATA_FAMILY));
     right_category_->setText(tr("%1 module").arg(mod.category));
     right_category_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                        .arg(ui::colors::TEXT_SECONDARY())
-                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::TINY.get())
                                        .arg(ui::fonts::DATA_FAMILY));
 
     // Update info card border
@@ -503,7 +503,7 @@ void MAAnalyticsScreen::update_right_panel() {
         row->setWordWrap(true);
         row->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_PRIMARY())
-                               .arg(ui::fonts::TINY)
+                               .arg(ui::fonts::TINY.get())
                                .arg(ui::fonts::DATA_FAMILY));
         capabilities_layout_->addWidget(row);
     }
@@ -530,7 +530,7 @@ void MAAnalyticsScreen::refresh_theme() {
                                             "padding:2px 6px; background:%4;"
                                             "border:1px solid %5;")
                                         .arg(ui::colors::AMBER())
-                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::TINY.get())
                                         .arg(ui::fonts::DATA_FAMILY())
                                         .arg(ui::colors::alpha(ui::colors::AMBER, 0.08))
                                         .arg(ui::colors::alpha(ui::colors::AMBER, 0.25)));
@@ -545,7 +545,7 @@ void MAAnalyticsScreen::refresh_theme() {
         ready_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 6px;"
                                             "background:%4; border:1px solid %5;")
                                         .arg(ui::colors::SUCCESS())
-                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::TINY.get())
                                         .arg(ui::fonts::DATA_FAMILY())
                                         .arg(ui::colors::alpha(ui::colors::SUCCESS, 0.08))
                                         .arg(ui::colors::alpha(ui::colors::SUCCESS, 0.25)));
@@ -566,7 +566,7 @@ void MAAnalyticsScreen::refresh_theme() {
     if (subtitle_label_)
         subtitle_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; letter-spacing:1px;")
                                            .arg(ui::colors::TEXT_SECONDARY())
-                                           .arg(ui::fonts::TINY)
+                                           .arg(ui::fonts::TINY.get())
                                            .arg(ui::fonts::DATA_FAMILY()));
 
     // Both side panels are sized from the font (build_left_sidebar /
@@ -594,7 +594,7 @@ void MAAnalyticsScreen::refresh_theme() {
         modules_title_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                 .arg(ui::colors::AMBER())
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::TINY.get())
                 .arg(ui::fonts::DATA_FAMILY()));
 
     // Category labels in sidebar
@@ -604,7 +604,7 @@ void MAAnalyticsScreen::refresh_theme() {
             cat->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        "padding:8px 12px 4px 12px; letter-spacing:1px;")
                                    .arg(ui::colors::TEXT_TERTIARY())
-                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::TINY.get())
                                    .arg(ui::fonts::DATA_FAMILY()));
     }
 
@@ -623,7 +623,7 @@ void MAAnalyticsScreen::refresh_theme() {
         info_title_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                 .arg(ui::colors::CYAN())
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::TINY.get())
                 .arg(ui::fonts::DATA_FAMILY()));
 
     // Capabilities header — uses theme accent
@@ -631,7 +631,7 @@ void MAAnalyticsScreen::refresh_theme() {
         cap_header_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                 .arg(ui::colors::AMBER())
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::TINY.get())
                 .arg(ui::fonts::DATA_FAMILY()));
 
     // Stats card
@@ -645,7 +645,7 @@ void MAAnalyticsScreen::refresh_theme() {
         stats_title_->setStyleSheet(
             QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                 .arg(ui::colors::CYAN())
-                .arg(ui::fonts::TINY)
+                .arg(ui::fonts::TINY.get())
                 .arg(ui::fonts::DATA_FAMILY()));
 
     // Stat labels and values
@@ -654,13 +654,13 @@ void MAAnalyticsScreen::refresh_theme() {
         for (auto* lbl : stat_labels)
             lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                    .arg(ui::colors::TEXT_SECONDARY())
-                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::TINY.get())
                                    .arg(ui::fonts::DATA_FAMILY()));
         auto stat_values = stats_card_->findChildren<QLabel*>("maStatValue");
         for (auto* val : stat_values)
             val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                    .arg(ui::colors::TEXT_PRIMARY())
-                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::TINY.get())
                                    .arg(ui::fonts::DATA_FAMILY()));
     }
 
@@ -669,7 +669,7 @@ void MAAnalyticsScreen::refresh_theme() {
         tips_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.4;"
                                            "background:%4; border:1px solid %5; padding:8px;")
                                        .arg(ui::colors::TEXT_SECONDARY())
-                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::TINY.get())
                                        .arg(ui::fonts::DATA_FAMILY())
                                        .arg(ui::colors::BG_RAISED())
                                        .arg(ui::colors::BORDER_DIM()));
@@ -685,25 +685,25 @@ void MAAnalyticsScreen::refresh_theme() {
         for (auto* lbl : status_labels)
             lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                    .arg(ui::colors::TEXT_SECONDARY())
-                                   .arg(ui::fonts::TINY)
+                                   .arg(ui::fonts::TINY.get())
                                    .arg(ui::fonts::DATA_FAMILY()));
         auto* mod_val = status_bar_->findChild<QLabel*>("maStatusModule");
         if (mod_val)
             mod_val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                        .arg(ui::colors::TEXT_PRIMARY())
-                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::TINY.get())
                                        .arg(ui::fonts::DATA_FAMILY()));
         auto* eng_val = status_bar_->findChild<QLabel*>("maStatusEngine");
         if (eng_val)
             eng_val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                        .arg(ui::colors::SUCCESS())
-                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::TINY.get())
                                        .arg(ui::fonts::DATA_FAMILY()));
         auto* ready_val = status_bar_->findChild<QLabel*>("maStatusReady");
         if (ready_val)
             ready_val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                          .arg(ui::colors::SUCCESS())
-                                         .arg(ui::fonts::TINY)
+                                         .arg(ui::fonts::TINY.get())
                                          .arg(ui::fonts::DATA_FAMILY()));
     }
 

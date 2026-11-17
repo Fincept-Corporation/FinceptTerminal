@@ -76,7 +76,7 @@ QString eqsb_row_text(const ci::Instrument& inst) {
     return parts.join(QStringLiteral("  \xC2\xB7  "));
 }
 
-bool eqsb_lot_rule(const QString& country, double* lot) {
+[[maybe_unused]] bool eqsb_lot_rule(const QString& country, double* lot) {
     static const QStringList kOne = {"US", "IN", "GB", "DE", "FR", "NL", "BE", "ES", "IT", "PT", "IE", "CH", "AT",
                                      "SE", "NO", "DK", "FI", "CA", "AU", "NZ", "KR", "BR", "MX", "ZA"};
     static const QStringList kHundred = {"JP", "CN", "SG", "MY", "TH", "ID"};

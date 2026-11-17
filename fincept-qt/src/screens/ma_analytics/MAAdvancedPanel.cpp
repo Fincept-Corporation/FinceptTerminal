@@ -106,7 +106,7 @@ QWidget* MAModulePanel::build_advanced_panel() {
                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
-                                    .arg(ui::fonts::SMALL));
+                                    .arg(ui::fonts::SMALL.get()));
         combo_inputs_["reg_type"] = reg_type;
         reg_vl->addWidget(build_input_row(tr("Regression Type"), reg_type, reg));
 

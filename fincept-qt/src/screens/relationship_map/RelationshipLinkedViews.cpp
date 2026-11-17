@@ -110,7 +110,7 @@ struct RlvColumn {
     QString title;
     RlvFmt fmt = RlvFmt::Text;
     int chars = 10; ///< preferred width in average characters
-    QString tip;
+    QString tip{};
 };
 
 RlvCell rlv_text(const QString& text, const QString& tip = QString()) {

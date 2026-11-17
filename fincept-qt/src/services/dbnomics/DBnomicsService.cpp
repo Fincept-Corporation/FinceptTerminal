@@ -112,7 +112,6 @@ QString DBnomicsService::build_url(const QString& path) const {
 
 void DBnomicsService::fetch_providers() {
     const QString url = build_url("/providers");
-    const int ttl = kProviderCacheSec;
     // The cached list is read and decoded on the decode thread; a miss starts the network fetch.
     (void)QtConcurrent::run(dbn_svc_pool(),
                             []() -> std::optional<QVector<DbnProvider>> {
@@ -122,7 +121,7 @@ void DBnomicsService::fetch_providers() {
                                     return std::nullopt;
                                 return dbn::decode_providers_cache(cached.toString());
                             })
-        .then(this, [this, url, ttl](std::optional<QVector<DbnProvider>> cached) {
+        .then(this, [this, url](std::optional<QVector<DbnProvider>> cached) {
             if (cached) {
                 LOG_DEBUG("DBnomicsService", "providers: serving from cache");
                 emit providers_loaded(*cached);
@@ -131,9 +130,9 @@ void DBnomicsService::fetch_providers() {
             LOG_DEBUG("DBnomicsService", "Fetching providers from API");
             fincept::HttpClient::instance().get_raw(
                 url,
-                [this, ttl](fincept::Result<QByteArray> result) {
+                [this](fincept::Result<QByteArray> result) {
                     (void)QtConcurrent::run(dbn_svc_pool(),
-                                            [reply = dbn_svc_reply(result), ttl]() {
+                                            [reply = dbn_svc_reply(result)]() {
                                                 DbnSvcAnswer<QVector<DbnProvider>> a;
                                                 QJsonDocument doc;
                                                 if (!dbn_svc_json(reply, doc, a.error))
@@ -141,7 +140,7 @@ void DBnomicsService::fetch_providers() {
                                                 a.value = dbn::decode_providers(doc);
                                                 fincept::CacheManager::instance().put(
                                                     QStringLiteral("dbnomics:providers"),
-                                                    QVariant(dbn::encode_providers_cache(a.value)), ttl,
+                                                    QVariant(dbn::encode_providers_cache(a.value)), kProviderCacheSec,
                                                     QStringLiteral("dbnomics"));
                                                 a.ok = true;
                                                 return a;
@@ -164,7 +163,6 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
     const bool first_page = (offset == 0);
     const QString ds_key = "dbnomics:datasets:" + provider_code;
     const QString url = build_url(QString("/datasets/%1?limit=50&offset=%2").arg(provider_code).arg(offset));
-    const int ttl = kDatasetCacheSec;
     // The first page may be cached: read and decoded on the decode thread; a miss (or a later page)
     // starts the network fetch.
     (void)QtConcurrent::run(dbn_svc_pool(),
@@ -176,7 +174,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                                     return std::nullopt;
                                 return dbn::decode_datasets_cache(cached.toString());
                             })
-        .then(this, [this, provider_code, offset, ds_key, url, ttl](std::optional<dbn::DbnDatasetPage> cached) {
+        .then(this, [this, provider_code, offset, ds_key, url](std::optional<dbn::DbnDatasetPage> cached) {
             if (cached) {
                 LOG_DEBUG("DBnomicsService", "datasets: serving from cache");
                 emit datasets_loaded(provider_code, cached->datasets, DbnPagination{0, 50, cached->total}, false);
@@ -185,10 +183,10 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
             LOG_DEBUG("DBnomicsService", QString("Fetching datasets for %1 offset=%2").arg(provider_code).arg(offset));
             fincept::HttpClient::instance().get_raw(
                 url,
-                [this, provider_code, offset, ds_key, ttl](fincept::Result<QByteArray> result) {
+                [this, provider_code, offset, ds_key](fincept::Result<QByteArray> result) {
                     const bool append = (offset > 0);
                     (void)QtConcurrent::run(dbn_svc_pool(),
-                                            [reply = dbn_svc_reply(result), append, ds_key, ttl]() {
+                                            [reply = dbn_svc_reply(result), append, ds_key]() {
                                                 DbnSvcAnswer<dbn::DbnDatasetPage> a;
                                                 QJsonDocument doc;
                                                 if (!dbn_svc_json(reply, doc, a.error))
@@ -196,7 +194,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                                                 a.value = dbn::decode_datasets(doc);
                                                 if (!append)
                                                     fincept::CacheManager::instance().put(
-                                                        ds_key, QVariant(dbn::encode_datasets_cache(a.value)), ttl,
+                                                        ds_key, QVariant(dbn::encode_datasets_cache(a.value)), kDatasetCacheSec,
                                                         QStringLiteral("dbnomics"));
                                                 a.ok = true;
                                                 return a;
@@ -231,7 +229,6 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
     if (!query.isEmpty())
         path += "&q=" + QString::fromUtf8(QUrl::toPercentEncoding(query));
     const QString url = build_url(path);
-    const int ttl = kSeriesCacheSec;
 
     // The unfiltered first page may be cached: read and decoded on the decode thread; a miss (a
     // search, a later page) starts the network fetch.
@@ -244,8 +241,7 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                                     return std::nullopt;
                                 return dbn::decode_series_cache(cv.toString());
                             })
-        .then(this, [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable, url,
-                     ttl](std::optional<dbn::DbnSeriesPage> cached) {
+        .then(this, [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable, url](std::optional<dbn::DbnSeriesPage> cached) {
             if (cached) {
                 LOG_DEBUG("DBnomicsService", "series: serving from cache");
                 emit series_loaded(provider_code, dataset_code, query, cached->series, DbnPagination{0, 50, cached->total},
@@ -256,10 +252,9 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                       QString("Fetching series %1 q='%2' offset=%3").arg(cache_key).arg(query).arg(offset));
             fincept::HttpClient::instance().get_raw(
                 url,
-                [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable,
-                 ttl](fincept::Result<QByteArray> result) {
+                [this, provider_code, dataset_code, query, offset, cache_key, series_ckey, cacheable](fincept::Result<QByteArray> result) {
                     (void)QtConcurrent::run(dbn_svc_pool(),
-                                            [reply = dbn_svc_reply(result), cacheable, series_ckey, ttl]() {
+                                            [reply = dbn_svc_reply(result), cacheable, series_ckey]() {
                                                 DbnSvcAnswer<dbn::DbnSeriesPage> a;
                                                 QJsonDocument doc;
                                                 if (!dbn_svc_json(reply, doc, a.error))
@@ -267,7 +262,7 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                                                 a.value = dbn::decode_series(doc);
                                                 if (a.value.ok && cacheable)
                                                     fincept::CacheManager::instance().put(
-                                                        series_ckey, QVariant(dbn::encode_series_cache(a.value)), ttl,
+                                                        series_ckey, QVariant(dbn::encode_series_cache(a.value)), kSeriesCacheSec,
                                                         QStringLiteral("dbnomics"));
                                                 a.ok = true;
                                                 return a;

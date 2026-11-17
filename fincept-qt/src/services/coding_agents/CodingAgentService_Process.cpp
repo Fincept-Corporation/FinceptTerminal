@@ -823,7 +823,7 @@ void CodingAgentService::register_with_client(const QString& harness_id, bool re
                               break;
                       }
                       run_cli_async(harness_id, remove_args, false,
-                                    [this, harness_id, old_name, new_name, proceed](int rc, const QString&) {
+                                    [harness_id, old_name, new_name, proceed](int rc, const QString&) {
                                         migration_notes().insert(
                                             harness_id,
                                             rc == 0 ? QStringLiteral("Renamed this terminal's older entry “%1” to “%2”.")

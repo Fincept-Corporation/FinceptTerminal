@@ -1586,7 +1586,7 @@ void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QSt
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     form->addRow(buttons);
 
-    auto validate = [=, this]() {
+    auto validate = [=]() {
         QStringList hard;
         QStringList advice;
         const double q = qty_spin->value();

@@ -115,7 +115,7 @@ void ConflictMonitorPanel::build_ui() {
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
                  ui::colors::BG_HOVER())
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+            .arg(ui::fonts::SMALL.get()));
     mt_hl->addWidget(map_type_combo_);
 
     mc_vl->addWidget(map_toolbar);
@@ -223,7 +223,7 @@ void ConflictMonitorPanel::build_ui() {
                 "QTableWidget::item:selected, QTableWidget::item:alternate:selected { background:%9; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
             .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL)
+            .arg(ui::fonts::SMALL.get())
             .arg(ui::colors::BG_RAISED())
             .arg(ui::colors::TEXT_SECONDARY())
             .arg(ui::colors::ROW_ALT())
@@ -290,7 +290,7 @@ void ConflictMonitorPanel::build_ui() {
                                             .arg(ui::colors::legible(cat_color))
                                             .arg(ui::colors::tint(cat_color, 0.12))
                                             .arg(ui::colors::tint(cat_color, 0.45))
-                                            .arg(ui::fonts::TINY)
+                                            .arg(ui::fonts::TINY.get())
                                             .arg(ui::fonts::DATA_FAMILY));
 
         if (empty_state_)
@@ -366,7 +366,7 @@ QWidget* ConflictMonitorPanel::make_section_header(const QString& text, QWidget*
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                "letter-spacing:1.5px;")
                            .arg(ui::colors::DANGER())
-                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::TINY.get())
                            .arg(ui::fonts::DATA_FAMILY()));
     return lbl;
 }
@@ -390,7 +390,7 @@ QWidget* ConflictMonitorPanel::make_stat_tile(const QString& label, QLabel** val
     val->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                "background:transparent; border:none;")
                            .arg(ui::colors::TEXT_PRIMARY())
-                           .arg(ui::fonts::HEADER)
+                           .arg(ui::fonts::HEADER.get())
                            .arg(ui::fonts::DATA_FAMILY()));
     val->setAlignment(Qt::AlignCenter);
     tl->addWidget(val);
@@ -399,7 +399,7 @@ QWidget* ConflictMonitorPanel::make_stat_tile(const QString& label, QLabel** val
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; letter-spacing:1px;"
                                "background:transparent; border:none;")
                            .arg(ui::colors::TEXT_SECONDARY())
-                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::TINY.get())
                            .arg(ui::fonts::DATA_FAMILY()));
     lbl->setAlignment(Qt::AlignCenter);
     tl->addWidget(lbl);
@@ -465,7 +465,7 @@ QWidget* ConflictMonitorPanel::build_top_categories_section(QWidget* parent) {
     empty->setObjectName("topcat_empty");
     empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-style:italic;")
                              .arg(ui::colors::TEXT_TERTIARY())
-                             .arg(ui::fonts::SMALL)
+                             .arg(ui::fonts::SMALL.get())
                              .arg(ui::fonts::DATA_FAMILY()));
     stats_layout_->addWidget(empty);
     return w;
@@ -490,7 +490,7 @@ QWidget* ConflictMonitorPanel::build_hotspots_section(QWidget* parent) {
     auto* empty = new QLabel(tr("Waiting for events…"), w);
     empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-style:italic;")
                              .arg(ui::colors::TEXT_TERTIARY())
-                             .arg(ui::fonts::SMALL)
+                             .arg(ui::fonts::SMALL.get())
                              .arg(ui::fonts::DATA_FAMILY()));
     hotspots_layout_->addWidget(empty);
     return w;
@@ -513,7 +513,7 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
                                         "background:%4; border:1px dashed %5;"
                                         "padding:14px 12px;")
                                     .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::SMALL.get())
                                     .arg(ui::fonts::DATA_FAMILY())
                                     .arg(ui::colors::BG_RAISED())
                                     .arg(ui::colors::BORDER_DIM()));
@@ -546,7 +546,7 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
     detail_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                          "background:transparent; border:none; line-height:1.3;")
                                      .arg(ui::colors::TEXT_PRIMARY())
-                                     .arg(ui::fonts::BODY)
+                                     .arg(ui::fonts::BODY.get())
                                      .arg(ui::fonts::DATA_FAMILY()));
     dvl->addWidget(detail_title_);
 
@@ -554,12 +554,12 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
     auto field_label_style = QString("color:%1; font-size:%2px; font-family:%3;"
                                      "letter-spacing:1px; background:transparent; border:none;")
                                  .arg(ui::colors::TEXT_TERTIARY())
-                                 .arg(ui::fonts::TINY)
+                                 .arg(ui::fonts::TINY.get())
                                  .arg(ui::fonts::DATA_FAMILY());
     auto value_style = QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                "background:transparent; border:none;")
                            .arg(ui::colors::TEXT_PRIMARY())
-                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::SMALL.get())
                            .arg(ui::fonts::DATA_FAMILY());
 
     auto* fields_grid_w = new QWidget(detail_panel_);
@@ -619,7 +619,7 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
                                         .arg(ui::colors::DANGER())
                                         .arg(ui::colors::TEXT_ON_ACCENT())
                                         .arg(ui::fonts::DATA_FAMILY())
-                                        .arg(ui::fonts::SMALL)
+                                        .arg(ui::fonts::SMALL.get())
                                         .arg(ui::colors::alpha(ui::colors::DANGER, 0.85)));
     connect(detail_open_btn_, &QPushButton::clicked, this, [this]() {
         const QUrl url(current_url_);
@@ -826,7 +826,7 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
         auto* empty = new QLabel(tr("No events match the current filters."), this);
         empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-style:italic;")
                                  .arg(ui::colors::TEXT_TERTIARY())
-                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::fonts::SMALL.get())
                                  .arg(ui::fonts::DATA_FAMILY()));
         stats_layout_->addWidget(empty);
         return;
@@ -862,7 +862,7 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
         name->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
                                     "background:transparent; border:none;")
                                 .arg(ui::colors::TEXT_SECONDARY())
-                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::SMALL.get())
                                 .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(name, 1);
 
@@ -870,7 +870,7 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
         cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                    "background:transparent; border:none;")
                                .arg(ui::colors::TEXT_PRIMARY())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::SMALL.get())
                                .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(cnt, 0, Qt::AlignRight);
         rvl->addWidget(top);
@@ -920,7 +920,7 @@ void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
         auto* empty = new QLabel(tr("No country data."), this);
         empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-style:italic;")
                                  .arg(ui::colors::TEXT_TERTIARY())
-                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::fonts::SMALL.get())
                                  .arg(ui::fonts::DATA_FAMILY()));
         hotspots_layout_->addWidget(empty);
         return;
@@ -949,7 +949,7 @@ void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
         rank->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                     "background:transparent; border:none;")
                                 .arg(ui::colors::TEXT_TERTIARY())
-                                .arg(ui::fonts::TINY)
+                                .arg(ui::fonts::TINY.get())
                                 .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(rank);
 
@@ -957,7 +957,7 @@ void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
         name->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
                                     "background:transparent; border:none;")
                                 .arg(ui::colors::TEXT_PRIMARY())
-                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::SMALL.get())
                                 .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(name, 1);
 
@@ -965,7 +965,7 @@ void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
         cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                    "background:transparent; border:none;")
                                .arg(ui::colors::DANGER())
-                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::SMALL.get())
                                .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(cnt, 0, Qt::AlignRight);
         rvl->addWidget(top);

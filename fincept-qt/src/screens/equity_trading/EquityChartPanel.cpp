@@ -364,7 +364,7 @@ void EquityChartPanel::show_status(StatusKind kind, const QString& title, const 
         status_title_->setStyleSheet(QString("background:transparent;border:none;color:%1;font-weight:700;"
                                              "font-size:%2px;letter-spacing:0.5px;font-family:%3;")
                                          .arg(color)
-                                         .arg(fincept::ui::fonts::SMALL)
+                                         .arg(fincept::ui::fonts::SMALL.get())
                                          .arg(fincept::ui::fonts::DATA_FAMILY()));
         status_kind_ = k;
     }
@@ -568,7 +568,7 @@ void EquityChartPanel::set_position(const QString& symbol, const QString& side, 
         pos_title_lbl_->setText(position_title(is_long, pos_qty_, pos_entry_, pos_symbol_, pos_currency_));
         pos_title_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
                                               "font-size:%1px;font-family:%2;color:%3;")
-                                          .arg(fincept::ui::fonts::TINY)
+                                          .arg(fincept::ui::fonts::TINY.get())
                                           .arg(fincept::ui::fonts::DATA_FAMILY())
                                           .arg(is_long ? c::POSITIVE() : c::NEGATIVE()));
     }
@@ -630,7 +630,7 @@ void EquityChartPanel::refresh_position_card() {
         pos_pnl_sign_ = sign;
         pos_pnl_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
                                             "font-size:%1px;font-family:%2;color:%3;")
-                                        .arg(fincept::ui::fonts::DATA)
+                                        .arg(fincept::ui::fonts::DATA.get())
                                         .arg(fincept::ui::fonts::DATA_FAMILY())
                                         .arg(pnl >= 0 ? c::POSITIVE() : c::NEGATIVE()));
     }

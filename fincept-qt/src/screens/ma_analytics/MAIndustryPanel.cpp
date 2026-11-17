@@ -172,7 +172,7 @@ QWidget* MAModulePanel::build_industry_panel() {
                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
-                                    .arg(ui::fonts::SMALL);
+                                    .arg(ui::fonts::SMALL.get());
 
     // One tab: Sector combo + one page of input rows per sector + a run button
     // that sends the selected sector's own keys.

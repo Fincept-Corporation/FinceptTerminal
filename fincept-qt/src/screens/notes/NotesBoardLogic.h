@@ -909,8 +909,8 @@ enum class CommandKind { Search, NewNote, NewFromTemplate, GroupBy, View, Open, 
 struct Command {
     CommandKind kind = CommandKind::Search;
     QString text;        ///< search text / note title / "open" query / board name / filter key
-    QString template_id; ///< NewFromTemplate
-    QString ticker;      ///< NewNote / NewFromTemplate
+    QString template_id{}; ///< NewFromTemplate
+    QString ticker{};    ///< NewNote / NewFromTemplate
     GroupBy group = GroupBy::Status;
     BoardViewMode view = BoardViewMode::Board;
     bool is_command() const { return kind != CommandKind::Search; }

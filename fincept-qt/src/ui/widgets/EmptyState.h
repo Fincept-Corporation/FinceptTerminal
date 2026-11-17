@@ -90,7 +90,7 @@ class EmptyState : public QWidget {
         QString secondary;
         QString tooltip;
         /// Since round 6 (7): the row's "fincept_agent_risk" kind ("spend", …); empty = none.
-        QString agent_risk;
+        QString agent_risk{};
         bool operator==(const Suggestion&) const = default;
     };
     /// Most suggestion rows shown.

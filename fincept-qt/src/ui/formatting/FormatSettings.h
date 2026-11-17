@@ -100,9 +100,9 @@ enum class MinorUnits {
 
 /// A user's change to one currency's display, or a custom currency code.
 struct CurrencyOverride {
-    QString symbol;    ///< empty = the table's symbol
+    QString symbol{};  ///< empty = the table's symbol
     int decimals = -1; ///< -1 = the table's decimals; 0..10
-    QString name;      ///< custom codes only; empty otherwise
+    QString name{};    ///< custom codes only; empty otherwise
     bool operator==(const CurrencyOverride&) const = default;
 };
 

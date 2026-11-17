@@ -76,7 +76,7 @@ QWidget* MAModulePanel::build_comparison_panel() {
                                              "font-family:%4; font-size:%5px; padding:4px 6px; }")
                                          .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                          .arg(ui::fonts::DATA_FAMILY)
-                                         .arg(ui::fonts::SMALL));
+                                         .arg(ui::fonts::SMALL.get()));
         combo_inputs_["rank_criteria"] = rank_criteria;
         rank_vl->addWidget(build_input_row(tr("Rank By"), rank_criteria, rank));
 

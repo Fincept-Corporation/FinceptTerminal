@@ -123,7 +123,7 @@ int DerivChainModel::rowCount(const QModelIndex& parent) const {
 int DerivChainModel::columnCount(const QModelIndex& parent) const {
     if (parent.isValid())
         return 0;
-    return mode_ == Mode::Flat ? kFlatCols : kExpiryCols;
+    return mode_ == Mode::Flat ? int(kFlatCols) : int(kExpiryCols);
 }
 
 int DerivChainModel::quote_at(int row, int column) const {

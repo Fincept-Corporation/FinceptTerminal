@@ -224,7 +224,7 @@ void rr_provenance(QTextCursor& cursor, const ReportComponent& c, const RenderCo
                           rr_fmt(ctx, 8, QString::fromLatin1(kRrRed)));
 }
 
-bool rr_numeric(const QString& t) {
+[[maybe_unused]] bool rr_numeric(const QString& t) {
     if (t.isEmpty())
         return false;
     for (QChar ch : t) {

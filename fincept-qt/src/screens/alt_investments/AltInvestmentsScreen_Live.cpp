@@ -430,7 +430,7 @@ void AltInvestmentsScreen::run_live_action(const QString& action) {
         call.cache_ttl_sec = 12 * 3600;
         call.source = QStringLiteral("CFTC + World Bank");
         const quint64 id = services::alt::AltInvestmentsService::instance().call(
-            call, this, [this, current, done](const services::alt::AltReply& r) {
+            call, this, [current, done](const services::alt::AltReply& r) {
                 if (!current())
                     return;
                 if (!r.ok) {

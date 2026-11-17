@@ -1741,7 +1741,7 @@ void MarketModelsPanel::populate_erp() {
     const QJsonObject estimates = d.value(QStringLiteral("erp_estimates")).toObject();
     const QJsonObject inputs = d.value(QStringLiteral("inputs")).toObject();
     auto tile = [this](const char* key) { return erp_kpis_->tile(QString::fromLatin1(key)); };
-    auto input_sub = [this](const QJsonObject& in) {
+    auto input_sub = [](const QJsonObject& in) {
         const QString as_of = mmd::str(in, "as_of");
         if (!as_of.isEmpty())
             return tr("as of %1").arg(as_of);

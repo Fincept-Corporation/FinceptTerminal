@@ -52,7 +52,7 @@ MarketsSymbolPick mse_pick(const inst::Instrument& i) {
     return p;
 }
 
-MarketsSymbolPick mse_pick_symbol(const QString& symbol, const QString& name = {}) {
+[[maybe_unused]] MarketsSymbolPick mse_pick_symbol(const QString& symbol, const QString& name = {}) {
     inst::Instrument i = inst::instrument_skeleton(symbol);
     if (i.symbol.isEmpty())
         i.symbol = symbol;
@@ -61,7 +61,7 @@ MarketsSymbolPick mse_pick_symbol(const QString& symbol, const QString& name = {
     return mse_pick(i);
 }
 
-QString mse_edit_sheet(bool compact) {
+[[maybe_unused]] QString mse_edit_sheet(bool compact) {
     return QStringLiteral("QLineEdit{background:%1;color:%2;border:1px solid %3;padding:%4px 8px;font-family:%5;"
                           "font-size:%6px;selection-background-color:%7;}"
                           "QLineEdit:focus{border-color:%8;}")
@@ -72,7 +72,7 @@ QString mse_edit_sheet(bool compact) {
         .arg(ui::colors::BG_HOVER(), ui::colors::AMBER());
 }
 
-QString mse_popup_sheet() {
+[[maybe_unused]] QString mse_popup_sheet() {
     return QStringLiteral("QListView{background:%1;color:%2;border:1px solid %3;font-family:%4;font-size:%5px;"
                           "outline:0;}"
                           "QListView::item{padding:3px 8px;}"

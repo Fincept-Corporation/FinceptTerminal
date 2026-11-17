@@ -70,7 +70,7 @@ namespace {
 
 /// BUILD FROM YAHOO / UPDATE TO TODAY results of the dataset bar (QuantModulePanel.cpp):
 /// what was written, what Yahoo was asked for, and what was skipped.
-void render_qlib_dataset_result(QVBoxLayout* out, QWidget* parent, const QString& accent, const QString& command,
+[[maybe_unused]] void render_qlib_dataset_result(QVBoxLayout* out, QWidget* parent, const QString& accent, const QString& command,
                                 const QJsonObject& p) {
     const QLocale loc;
     auto num = [&loc](const QJsonValue& v) { return loc.toString(v.toInt()); };

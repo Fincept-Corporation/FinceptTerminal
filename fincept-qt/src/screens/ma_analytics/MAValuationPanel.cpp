@@ -331,7 +331,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
         sens_hint->setWordWrap(true);
         sens_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                      .arg(ui::colors::TEXT_SECONDARY())
-                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::fonts::SMALL.get())
                                      .arg(ui::fonts::DATA_FAMILY));
         sens_vl->addWidget(sens_hint);
 
@@ -384,7 +384,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
                                       comps);
         comps_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                       .arg(ui::colors::TEXT_SECONDARY())
-                                      .arg(ui::fonts::SMALL)
+                                      .arg(ui::fonts::SMALL.get())
                                       .arg(ui::fonts::DATA_FAMILY));
         comps_vl->addWidget(comps_hint);
 
@@ -412,7 +412,7 @@ QWidget* MAModulePanel::build_valuation_panel() {
                                            "font-family:%4; font-size:%5px; padding:4px 6px; }")
                                        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                        .arg(ui::fonts::DATA_FAMILY)
-                                       .arg(ui::fonts::SMALL));
+                                       .arg(ui::fonts::SMALL.get()));
         comps_peers->setEditText(QStringLiteral("MSFT,GOOGL,AMZN,META"));
         combo_inputs_["comps_peers"] = comps_peers;
         comps_vl->addWidget(build_input_row(tr("Comp Tickers"), comps_peers, comps));

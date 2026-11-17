@@ -1156,8 +1156,8 @@ int main(int argc, char* argv[]) {
     // these files for SQLite to manage. Single-instance enforcement is owned
     // by InstanceLock above.
 
-    // The legacy v3 settings database (%LOCALAPPDATA%\FinceptTerminal\
-    // fincept_settings.db and the macOS / Linux equivalents) is NOT cleaned here
+    // The legacy v3 settings database (fincept_settings.db in the FinceptTerminal folder of
+    // %LOCALAPPDATA%, and the macOS / Linux equivalents) is NOT cleaned here
     // any more: that folder is shared with the separate private build of Fincept
     // Terminal, and deleting a database's -wal throws away its committed but
     // uncheckpointed transactions (see the note above). It is only read, below.

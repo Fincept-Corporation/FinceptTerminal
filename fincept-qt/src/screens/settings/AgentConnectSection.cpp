@@ -546,8 +546,8 @@ void AgentConnectSection::on_check_connections() {
         struct Row {
             QString id;
             bool ok = true;
-            QString failure;
-            QString list_detail;
+            QString failure{};
+            QString list_detail{};
             int steps = 0;
             qint64 ms = 0;
         };

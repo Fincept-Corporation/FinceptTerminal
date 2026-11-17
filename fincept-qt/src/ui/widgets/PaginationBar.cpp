@@ -13,7 +13,7 @@ static QString nav_btn_style() {
                    "QPushButton:hover { background:%6; color:%7; }"
                    "QPushButton:disabled { color:%8; background:%9; border-color:%10; }")
         .arg(colors::BG_RAISED(), colors::TEXT_SECONDARY(), colors::BORDER_MED())
-        .arg(fonts::TINY)
+        .arg(fonts::TINY.get())
         .arg(fonts::DATA_FAMILY)
         .arg(colors::BG_HOVER(), colors::TEXT_PRIMARY())
         .arg(colors::TEXT_DIM(), colors::BG_SURFACE(), colors::BORDER_DIM());
@@ -30,7 +30,7 @@ PaginationBar::PaginationBar(QWidget* parent) : QWidget(parent) {
     status_label_ = new QLabel;
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:transparent;")
                                      .arg(colors::TEXT_TERTIARY())
-                                     .arg(fonts::TINY)
+                                     .arg(fonts::TINY.get())
                                      .arg(fonts::DATA_FAMILY));
     layout->addWidget(status_label_);
 
@@ -63,7 +63,7 @@ PaginationBar::PaginationBar(QWidget* parent) : QWidget(parent) {
     page_label_->setStyleSheet(
         QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; background:transparent;")
             .arg(colors::TEXT_PRIMARY())
-            .arg(fonts::TINY)
+            .arg(fonts::TINY.get())
             .arg(fonts::DATA_FAMILY));
     layout->addWidget(page_label_);
 
@@ -96,7 +96,7 @@ PaginationBar::PaginationBar(QWidget* parent) : QWidget(parent) {
                                        "  font-size:%4px; font-family:%5; padding:1px 4px; }"
                                        "QComboBox::drop-down { border:none; }")
                                    .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_MED())
-                                   .arg(fonts::TINY)
+                                   .arg(fonts::TINY.get())
                                    .arg(fonts::DATA_FAMILY));
     connect(size_combo_, &QComboBox::currentTextChanged, this, [this](const QString& text) {
         page_size_ = text.toInt();
@@ -109,7 +109,7 @@ PaginationBar::PaginationBar(QWidget* parent) : QWidget(parent) {
     auto* rows_lbl = new QLabel(QStringLiteral("rows"));
     rows_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:transparent;")
                                 .arg(colors::TEXT_DIM())
-                                .arg(fonts::TINY)
+                                .arg(fonts::TINY.get())
                                 .arg(fonts::DATA_FAMILY));
     layout->addWidget(rows_lbl);
 

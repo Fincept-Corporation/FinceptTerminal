@@ -38,8 +38,8 @@ QString rm_money(double v, const QString& ccy) {
 struct RmValue {
     bool ok = true;  // false: a conversion was needed and no rate is known
     double value = 0;
-    QString ccy;     // currency of `value` ("" = unknown)
-    QString note;    // rate and time when converted
+    QString ccy{};   // currency of `value` ("" = unknown)
+    QString note{};  // rate and time when converted
 };
 
 RmValue rm_in_limits_ccy(double value, const QString& price_ccy, const QString& limits_ccy) {

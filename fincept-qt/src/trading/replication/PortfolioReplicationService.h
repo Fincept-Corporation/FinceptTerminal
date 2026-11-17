@@ -31,7 +31,7 @@ struct SourceItem {
     // Currency avg_price / ltp are quoted in, as quoted ("INR", "USD", "GBp" pence).
     // to_source_items(): the venue table's for `exchange` (empty for a segment it
     // does not list — the caller fills in the source account's); empty = unknown.
-    QString currency;
+    QString currency{};
 };
 
 // One planned paper order. Strings (side/product) match pt_place_order directly.

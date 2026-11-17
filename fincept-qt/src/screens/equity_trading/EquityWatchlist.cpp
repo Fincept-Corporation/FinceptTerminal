@@ -158,7 +158,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
                 "QHeaderView::section { background:%7; color:%8; font-size:%4px; font-weight:700;"
                 " font-family:%5; border:none; border-bottom:1px solid %3; padding:2px 2px; }")
             .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
-            .arg(fincept::ui::fonts::SMALL)
+            .arg(fincept::ui::fonts::SMALL.get())
             .arg(fincept::ui::fonts::DATA_FAMILY(), fincept::ui::colors::BG_HOVER(), fincept::ui::colors::BG_RAISED(),
                  fincept::ui::colors::TEXT_SECONDARY()));
     table_->setColumnCount(ColCount);

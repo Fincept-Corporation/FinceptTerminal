@@ -72,7 +72,7 @@ QWidget* MAModulePanel::build_startup_panel() {
                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
                                     .arg(ui::fonts::DATA_FAMILY)
-                                    .arg(ui::fonts::SMALL));
+                                    .arg(ui::fonts::SMALL.get()));
         combo_inputs_["sc_stage"] = sc_stage;
         scvl->addWidget(build_input_row(tr("Stage"), sc_stage, sc));
 
@@ -225,7 +225,7 @@ QWidget* MAModulePanel::build_startup_panel() {
         comp_hint->setWordWrap(true);
         comp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                      .arg(ui::colors::TEXT_SECONDARY())
-                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::fonts::SMALL.get())
                                      .arg(ui::fonts::DATA_FAMILY));
         comp_vl->addWidget(comp_hint);
 

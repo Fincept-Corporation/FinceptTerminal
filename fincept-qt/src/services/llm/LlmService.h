@@ -128,7 +128,7 @@ struct ChatRoute {
     /// Reasoning effort for this request: "low" | "medium" | "high" | "xhigh" | "max".
     /// Empty = the server default (medium). Applies to the Fincept model; high and above
     /// cost extra credits per model call (the server's price table decides how many).
-    QString effort;
+    QString effort{};
 };
 
 /// (chunk_text, is_done) — invoked on a background thread.

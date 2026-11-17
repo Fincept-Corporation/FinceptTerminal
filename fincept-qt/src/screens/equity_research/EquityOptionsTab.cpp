@@ -348,7 +348,7 @@ void EquityOptionsTab::populate_table() {
     QFont bold = table_->font();
     bold.setBold(true);
 
-    auto tip_for = [this](const fd::OptionContract& k) {
+    auto tip_for = [](const fd::OptionContract& k) {
         QStringList t;
         t << k.contract;
         if (fd::has(k.mid))
@@ -509,8 +509,8 @@ void EquityOptionsTab::update_analytics() {
     if (!put_iv.points.isEmpty())
         iv_chart_->add_series(put_iv);
     iv_chart_->set_value_formatter(ui::TimeSeriesChart::Axis::Left, [](double v) { return ou::fraction_pct(v, 1, false); });
-    iv_chart_->set_time_formatter([this](double x) { return tr("Strike %1").arg(num(x, 2)); });
-    iv_chart_->set_tick_time_formatter([this](double x) { return num(x, 0); });
+    iv_chart_->set_time_formatter([](double x) { return tr("Strike %1").arg(num(x, 2)); });
+    iv_chart_->set_tick_time_formatter([](double x) { return num(x, 0); });
     if (fd::has(spot)) {
         const double w = std::max(1e-6, (rows.last().strike - rows.first().strike) * 0.004);
         iv_chart_->add_band(spot - w, spot + w, ui::ChartColorRole::Accent, tr("Spot %1").arg(num(spot, 2)));

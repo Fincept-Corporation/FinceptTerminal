@@ -71,7 +71,7 @@ void RelationshipPanel::build_ui() {
     title_lbl_ = new QLabel(tr("GEOPOLITICAL RELATIONSHIP NETWORK"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
                                   .arg(ui::colors::INFO())
-                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::TINY.get())
                                   .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
 
@@ -81,7 +81,7 @@ void RelationshipPanel::build_ui() {
     sample_badge_->setStyleSheet(QString("color:%4; background:%1; font-size:%2px; font-weight:700;"
                                          "font-family:%3; padding:2px 6px; border-radius:2px; letter-spacing:1px;")
                                      .arg(ui::colors::WARNING())
-                                     .arg(ui::fonts::TINY)
+                                     .arg(ui::fonts::TINY.get())
                                      .arg(ui::fonts::DATA_FAMILY)
                                      .arg(ui::colors::TEXT_ON_ACCENT()));
     hhl->addWidget(sample_badge_);
@@ -98,7 +98,7 @@ void RelationshipPanel::build_ui() {
                                            "QPushButton:disabled { color:%6; border-color:%7; }")
                                        .arg(ui::colors::INFO(), ui::colors::alpha(ui::colors::INFO, 0.5))
                                        .arg(ui::fonts::DATA_FAMILY())
-                                       .arg(ui::fonts::TINY)
+                                       .arg(ui::fonts::TINY.get())
                                        .arg(ui::colors::alpha(ui::colors::INFO, 0.10), ui::colors::TEXT_TERTIARY(),
                                             ui::colors::BORDER_DIM()));
     load_stats_btn_->setToolTip(tr("Fetch the live country and category statistics of the news-event feed "
@@ -110,7 +110,7 @@ void RelationshipPanel::build_ui() {
     stats_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
                                       "background:%5; border:1px solid %4;")
                                   .arg(ui::colors::TEXT_SECONDARY())
-                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::TINY.get())
                                   .arg(ui::fonts::DATA_FAMILY)
                                   .arg(ui::colors::BORDER_DIM())
                                   .arg(ui::colors::overlay(0.04)));
@@ -139,7 +139,7 @@ void RelationshipPanel::build_ui() {
         sample_note_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px;"
                                             "background:%4; border:1px solid %5;")
                                         .arg(ui::colors::TEXT_SECONDARY())
-                                        .arg(ui::fonts::SMALL)
+                                        .arg(ui::fonts::SMALL.get())
                                         .arg(ui::fonts::DATA_FAMILY)
                                         .arg(ui::colors::overlay(0.03))
                                         .arg(ui::colors::BORDER_DIM()));
@@ -247,7 +247,7 @@ void RelationshipPanel::rebuild_sections() {
         sec_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        "letter-spacing:2px; padding-bottom:4px; border-bottom:1px solid %4;")
                                    .arg(color)
-                                   .arg(ui::fonts::SMALL)
+                                   .arg(ui::fonts::SMALL.get())
                                    .arg(ui::fonts::DATA_FAMILY)
                                    .arg(ui::colors::alpha(QColor(color), 0.3)));
         sections_layout_->addWidget(sec_lbl);
@@ -256,7 +256,7 @@ void RelationshipPanel::rebuild_sections() {
             empty->setWordWrap(true);
             empty->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 0;")
                                      .arg(ui::colors::TEXT_TERTIARY())
-                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::fonts::SMALL.get())
                                      .arg(ui::fonts::DATA_FAMILY));
             sections_layout_->addWidget(empty);
             return;
@@ -385,7 +385,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     auto* name = new QLabel(node.label.toUpper(), name_row);
     name->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                             .arg(col_hex)
-                            .arg(ui::fonts::SMALL)
+                            .arg(ui::fonts::SMALL.get())
                             .arg(ui::fonts::DATA_FAMILY));
     name_hl->addWidget(name, 1);
 
@@ -395,7 +395,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
                                  "padding:2px 6px; background:%4; border:1px solid %5;"
                                  "border-radius:8px; letter-spacing:1px;")
                              .arg(col_hex)
-                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::TINY.get())
                              .arg(ui::fonts::DATA_FAMILY)
                              .arg(ui::colors::alpha(color, 0.12))
                              .arg(ui::colors::alpha(color, 0.3)));
@@ -406,7 +406,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     auto* type_lbl = new QLabel(detail.isEmpty() ? node.type.toUpper() : detail, card);
     type_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                 .arg(ui::colors::TEXT_SECONDARY())
-                                .arg(ui::fonts::TINY)
+                                .arg(ui::fonts::TINY.get())
                                 .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(type_lbl);
 
@@ -425,7 +425,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
                                         "background:%5; border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
                                     .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(ui::fonts::TINY)
+                                    .arg(ui::fonts::TINY.get())
                                     .arg(ui::colors::BORDER_DIM())
                                     .arg(ui::fonts::DATA_FAMILY)
                                     .arg(ui::colors::overlay(0.05)));
@@ -438,7 +438,7 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
                                         "background:%5; border:1px solid %3;"
                                         "border-radius:8px; font-family:%4;")
                                     .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(ui::fonts::TINY)
+                                    .arg(ui::fonts::TINY.get())
                                     .arg(ui::colors::BORDER_DIM())
                                     .arg(ui::fonts::DATA_FAMILY)
                                     .arg(ui::colors::overlay(0.05)));
