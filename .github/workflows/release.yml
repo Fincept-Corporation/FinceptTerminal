@@ -1564,7 +1564,10 @@ jobs:
             appstreamcli validate --no-net --explain "${X}"/usr/share/metainfo/*.xml || { echo "::error::appstreamcli validate failed"; rc=1; }
             echo "::endgroup::"
             echo "::group::lintian"
-            lintian --fail-on error "${DEB}" || { echo "::error::lintian reported errors"; rc=1; }
+            # alien-tag: the overrides file names tags for every lintian we lint with; a newer
+            # lintian (Debian 13) has dropped python-script-but-no-python-dep and reports the
+            # override itself as an error. The override must stay for the older releases.
+            lintian --fail-on error --suppress-tags alien-tag "${DEB}" || { echo "::error::lintian reported errors"; rc=1; }
             echo "::endgroup::"
             exit "${rc}"'
 
@@ -1722,6 +1725,17 @@ jobs:
             BINARY="build/${{ env.APP_NAME }}"
           fi
           bash ../.github/scripts/ci_app_checks.sh selftests "$BINARY" ci
+
+      # A self-test that dies with a signal prints nothing useful ("Trace/BPT trap: 5"). When
+      # the step above fails, show the crashed thread of every crash report macOS wrote, so the
+      # failing function is in this run's log instead of needing a second, diagnostic run.
+      - name: Crash reports (on self-test failure)
+        if: failure()
+        shell: bash
+        run: |
+          sleep 30
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || true
+          python3 .github/scripts/crash_report_summary.py || true
 
       # ── Stage .app bundle contents (Python + resources FIRST) ─────────────
       # Order is critical: Python.framework and resources must be in the bundle

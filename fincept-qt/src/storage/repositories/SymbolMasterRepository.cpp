@@ -61,11 +61,13 @@ void smr_bind(QSqlQuery& q, const QVariantList& values) {
 }
 
 QString smr_placeholders(qsizetype n) {
-    QString s;
-    s.reserve(n * 2);
-    for (qsizetype i = 0; i < n; ++i)
-        s += (i == 0) ? QStringLiteral("?") : QStringLiteral(",?");
-    return s;
+    // "?,?,?" for n bound values. Deliberately not a hand-written append loop: AppleClang 17
+    // (arm64, -O2) compiled `for (i..n) s += (i == 0) ? "?" : ",?"` into two appends followed
+    // by a trap instruction, so the first query with three or more ids killed the process
+    // (macOS only; the 4.5.3 self-tests on the release runner).
+    if (n <= 0)
+        return QString();
+    return QStringList(n, QStringLiteral("?")).join(QLatin1Char(','));
 }
 
 // Empty containers skip QJsonDocument entirely (most records have no lists): the JSON
