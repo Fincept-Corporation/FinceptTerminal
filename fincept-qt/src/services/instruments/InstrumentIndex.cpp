@@ -78,6 +78,10 @@ InstrumentIndex::InstrumentIndex() {
 }
 
 InstrumentIndex::~InstrumentIndex() {
+    quiesce();
+}
+
+void InstrumentIndex::quiesce() {
     shutting_down_.store(true, std::memory_order_release);
     reader_pool_.clear();
     writer_pool_.clear();
@@ -108,6 +112,14 @@ void InstrumentIndex::start() {
         started_path_ = path;
     }
     IixRepo::set_forbidden_thread(thread());
+    // The workers are joined when the application object goes away - before static
+    // destruction, where this singleton's own destructor would be too late (a short run,
+    // e.g. a self-test, returned from main() with the seed task still on its thread).
+    static bool post_routine_added = false;
+    if (!post_routine_added) {
+        post_routine_added = true;
+        qAddPostRoutine([]() { InstrumentIndex::instance().quiesce(); });
+    }
     run_write([this](QSqlDatabase& db) { seed_task(db); });
     run_write([this](QSqlDatabase& db) { broker_task(db, QString(), false); });
     if (!broker_timer_->isActive())

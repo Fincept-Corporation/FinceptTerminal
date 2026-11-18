@@ -867,7 +867,10 @@ VsRegistry vs_build() {
 }
 
 const VsRegistry& vs_reg() {
-    static const VsRegistry reg = vs_build();
+    // Immortal: symbol parsing runs on worker threads (instrument seeding, imports) that can
+    // still be busy when main() returns. A destructible registry was freed under them at
+    // exit - a use-after-free that crashed short runs (the self-tests) on Linux and macOS.
+    static const VsRegistry& reg = *new VsRegistry(vs_build());
     return reg;
 }
 

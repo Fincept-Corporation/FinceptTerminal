@@ -83,6 +83,9 @@ class InstrumentIndex : public QObject {
 
     /// Idempotent: seeds / imports once the database is open (see the header comment).
     void start();
+    /// Stop taking work and wait for the worker pools. Runs when the application object is
+    /// destroyed (a post routine), i.e. before static objects the workers use are torn down.
+    void quiesce();
 
     // ── Search ──────────────────────────────────────────────────────────────
 

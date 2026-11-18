@@ -1189,8 +1189,13 @@ int main(int argc, char* argv[]) {
                     break;
                 // The same framework warning can repeat per paint or per row: one line
                 // per distinct message (first 60 characters) per minute, with a count.
-                static QMutex rl_mutex;
-                static QHash<QString, QPair<qint64, int>> rl_seen; // key -> (last written ms, held back)
+                // Immortal, like the logger: Qt still warns while static objects are being
+                // destroyed at exit ("QProcess: Destroyed while process is still running"
+                // from a QProcess owned by a static), and a destructible map here had
+                // already been freed by then — a use-after-free that crashed the self-tests
+                // at exit on Linux and macOS.
+                static QMutex& rl_mutex = *new QMutex;
+                static auto& rl_seen = *new QHash<QString, QPair<qint64, int>>; // key -> (last written ms, held back)
                 const QString key = tag + QLatin1Char('|') + msg.left(60);
                 const qint64 now = QDateTime::currentMSecsSinceEpoch();
                 int held = 0;
