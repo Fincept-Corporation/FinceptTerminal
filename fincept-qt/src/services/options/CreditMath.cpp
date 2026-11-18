@@ -115,8 +115,10 @@ double accrual_factor(DayCount dc) {
 
 rates::ZeroCurve flat_curve(double rate) {
     rates::ZeroCurve z;
-    z.t = {1.0};
-    z.r = {std::isfinite(rate) ? rate : 0.0};
+    // push_back, not `= {x}`: GCC 12 reports the one-element initializer_list copy as
+    // out of bounds (-Warray-bounds false positive, an error in CI).
+    z.t.push_back(1.0);
+    z.r.push_back(std::isfinite(rate) ? rate : 0.0);
     return z;
 }
 
@@ -164,8 +166,8 @@ double HazardCurve::survival(double T) const {
 
 HazardCurve flat_hazard(double h) {
     HazardCurve c;
-    c.t = {1.0};
-    c.h = {h};
+    c.t.push_back(1.0); // not `= {x}`: see flat_curve()
+    c.h.push_back(h);
     return c;
 }
 

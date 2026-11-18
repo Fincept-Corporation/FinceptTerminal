@@ -347,7 +347,7 @@ int run_core_tools_selftest() {
     // ── Waits ────────────────────────────────────────────────────────────────
     ToolResult w1 = run([&](ui::Reply r) {
         ui::ui_wait(QJsonObject{{QStringLiteral("until"), QStringLiteral("text")},
-                                {QStringLiteral("text"), QStringLiteral("Refreshed 1")},
+                                {QStringLiteral("text"), QStringLiteral("Refreshed 2")},
                                 {QStringLiteral("target"), dref}},
                     {}, std::move(r));
     });
@@ -434,7 +434,7 @@ int run_core_tools_selftest() {
                 QStringLiteral("a click that opens a modal answers at once and reports the dialog"),
                 open_reply->has_value() ? text_of(**open_reply) : QStringLiteral("no answer"));
     tally.check(blocked->has_value() && !(*blocked)->success && text_of(**blocked).contains(QStringLiteral("blocks")) &&
-                    refreshed == 1,
+                    refreshed == 2, // the two earlier clicks only: the one behind the modal did nothing
                 QStringLiteral("a modal dialog blocks clicks behind it"),
                 blocked->has_value() ? text_of(**blocked) : QStringLiteral("no answer"));
     tally.check(answer->has_value() && (*answer)->success && answered == 1,

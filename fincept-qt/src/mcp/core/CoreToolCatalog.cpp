@@ -60,22 +60,9 @@ std::vector<UiToolSpec> ui_tool_specs() {
 
     out.push_back(
         {QStringLiteral("ui_open"), kCategoryNavigation,
-         QStringLiteral("Open a screen by id or name, optionally on a symbol; no screen and no symbol = the list of "
-                        "screens. To open / show / pull up a stock, company or ticker use screen=equity_research "
-                        "with its symbol (a symbol alone opens it there too). Answers once the panel has loaded: "
-                        "its ref and controls. Do the work on the screen that owns it: one company (quote, chart, "
-                        "financials, valuation, peers, filings) = equity_research; market overview, indices, "
-                        "movers, sectors = markets; stock orders and positions = equity_trading; crypto orders = "
-                        "crypto_trading; coins, on-chain, DeFi = crypto_center; holdings, P&L, allocation, risk = "
-                        "portfolio; watchlists = watchlist; headlines = news; filters and stock screens = screener; "
-                        "option chains and strategies = fno; futures, swaps, pricing models = derivatives; "
-                        "volatility surfaces = surface_analytics; strategy tests = backtesting; rule-based or "
-                        "automated strategies = algo_trading; macro series (GDP, CPI, rates) = economics or "
-                        "dbnomics; earnings, dividends, economic events = calendars; ownership and supply-chain "
-                        "links = relationship_map; deals and M&A = ma_analytics; prediction markets = polymarket; "
-                        "China / Asia data = akshare or asia_markets; notebooks and scripts = code_editor; "
-                        "spreadsheets = excel; written reports = report_builder; workflows = node_editor; models, "
-                        "agents, API keys = agent_config or settings; notes = notes."),
+         QStringLiteral("Open a screen by id or name, optionally on a symbol; no arguments = the list of screens "
+                        "and which kind of task belongs on each. A symbol alone opens that stock in "
+                        "equity_research. Answers once the panel has loaded: its ref and controls."),
          ToolSchemaBuilder()
              .string("screen", "Screen id or name, e.g. markets, news, equity_research, portfolio")
              .string("symbol", "e.g. AAPL, RELIANCE.NS, BTC/USDT")

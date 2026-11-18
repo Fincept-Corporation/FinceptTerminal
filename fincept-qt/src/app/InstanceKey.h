@@ -39,6 +39,11 @@ inline QString normalise_root(const QString& path, bool case_insensitive = kCase
     p = QDir::cleanPath(p);
     if (p.isEmpty() || p == QLatin1String("."))
         return {};
+    // A bare drive ("C:\" → "C:/") keeps its slash on every platform: QDir::cleanPath()
+    // preserves it only where drive letters exist, and the key must not depend on the OS
+    // the path was normalised on.
+    if (p.size() == 2 && p.at(1) == QLatin1Char(':') && p.at(0).isLetter())
+        p += QLatin1Char('/');
     while (p.size() > 1 && p.endsWith(QLatin1Char('/')) && !p.endsWith(QLatin1String(":/")))
         p.chop(1);
     return case_insensitive ? p.toLower() : p;

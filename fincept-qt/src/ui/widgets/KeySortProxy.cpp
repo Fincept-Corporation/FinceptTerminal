@@ -129,6 +129,61 @@ KeyClass classify(const QVariant& key, const Options& options) {
     return KeyClass::String;
 }
 
+// "A2" before "A10". QCollator's numeric mode does this only where Qt collates through ICU
+// or the Windows / macOS APIs; a Qt built without ICU (the Linux packages) falls back to the
+// C library, which ignores the mode and sorted "A10" before "A2". So digit runs are compared
+// here, by value, and only the text between them goes to the collator: the same order on
+// every platform.
+static int ksp_natural_compare(const QString& a, const QString& b, const QCollator& collator) {
+    qsizetype i = 0;
+    qsizetype j = 0;
+    while (i < a.size() && j < b.size()) {
+        const bool da = a.at(i).isDigit();
+        const bool db = b.at(j).isDigit();
+        qsizetype ie = i;
+        qsizetype je = j;
+        if (da && db) {
+            while (ie < a.size() && a.at(ie).isDigit())
+                ++ie;
+            while (je < b.size() && b.at(je).isDigit())
+                ++je;
+            // Leading zeros carry no value; a longer run of the rest is the larger number.
+            qsizetype ia = i;
+            qsizetype jb = j;
+            while (ia < ie - 1 && a.at(ia).digitValue() == 0)
+                ++ia;
+            while (jb < je - 1 && b.at(jb).digitValue() == 0)
+                ++jb;
+            if (ie - ia != je - jb)
+                return (ie - ia) < (je - jb) ? -1 : 1;
+            for (qsizetype k = 0; k < ie - ia; ++k) {
+                const int x = a.at(ia + k).digitValue();
+                const int y = b.at(jb + k).digitValue();
+                if (x != y)
+                    return x < y ? -1 : 1;
+            }
+        } else {
+            while (ie < a.size() && !a.at(ie).isDigit())
+                ++ie;
+            while (je < b.size() && !b.at(je).isDigit())
+                ++je;
+            // Digits sort before text when one side has a number where the other has letters.
+            if (da != db)
+                return da ? -1 : 1;
+            const int c = collator.compare(QStringView(a).mid(i, ie - i), QStringView(b).mid(j, je - j));
+            if (c != 0)
+                return c;
+        }
+        i = ie;
+        j = je;
+    }
+    if (i < a.size())
+        return 1;
+    if (j < b.size())
+        return -1;
+    return 0;
+}
+
 int compare_keys(const QVariant& a, const QVariant& b, const QCollator& collator, const Options& options) {
     const KeyClass ca = classify(a, options);
     const KeyClass cb = classify(b, options);
@@ -142,7 +197,8 @@ int compare_keys(const QVariant& a, const QVariant& b, const QCollator& collator
         case KeyClass::Date:
             return ksp_compare_dates(a, b);
         case KeyClass::String: {
-            const int c = collator.compare(a.toString(), b.toString());
+            const int c = collator.numericMode() ? ksp_natural_compare(a.toString(), b.toString(), collator)
+                                                 : collator.compare(a.toString(), b.toString());
             return c < 0 ? -1 : (c > 0 ? 1 : 0);
         }
     }

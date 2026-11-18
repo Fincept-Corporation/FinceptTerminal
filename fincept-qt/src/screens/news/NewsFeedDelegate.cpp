@@ -323,7 +323,16 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
 
 void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
                                           bool hovered) const {
+    // Same GCC 12 false positive as paint_wire_row() (-Warray-bounds on the inlined move out
+    // of the QVariant temporary).
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     auto cluster = index.data(ClusterRole).value<services::NewsCluster>();
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
     auto monitor_color = index.data(MonitorColorRole).toString();
     bool is_new = index.data(IsNewRole).toBool();
     auto velocity_text = index.data(VelocityTextRole).toString();

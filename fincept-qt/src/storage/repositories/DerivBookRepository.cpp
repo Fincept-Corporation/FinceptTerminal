@@ -77,7 +77,9 @@ QString dbr_currency(const QString& c) {
 Result<QVector<bk::BookPosition>> DerivBookRepository::positions(const QString& book) const {
     QSqlQuery q(db_);
     const bool all = book.trimmed().isEmpty();
-    const QString sql = QStringLiteral("SELECT %1 FROM deriv_positions%2 ORDER BY created_at, id")
+    // Ties on created_at (two saves in one millisecond) keep insertion order: `id` is a random
+    // UUID, which made the order of such rows arbitrary.
+    const QString sql = QStringLiteral("SELECT %1 FROM deriv_positions%2 ORDER BY created_at, rowid")
                             .arg(QLatin1String(kDbrPositionCols), all ? QString() : QStringLiteral(" WHERE book = ?"));
     if (!dbr_exec(q, sql, all ? QVariantList{} : QVariantList{book.trimmed()}))
         return Result<QVector<bk::BookPosition>>::err(dbr_error(q, "deriv_positions select"));

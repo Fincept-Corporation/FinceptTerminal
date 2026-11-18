@@ -178,6 +178,21 @@ QString list_screens(WindowFrame* f) {
         lines << QStringLiteral("Open now: ") + open.join(QStringLiteral(", "));
     lines << QStringLiteral("Take a symbol: ") + symbol_screens().join(QStringLiteral(", ")) +
                  QStringLiteral(" (crypto_trading: crypto only).");
+    // Which screen owns which kind of task. Kept here, not in the tool description: the
+    // description is sent with every request and has a byte budget (tst_mcp_ui_catalog).
+    lines << QStringLiteral(
+        "Do the work on the screen that owns it: one company (quote, chart, financials, valuation, peers, "
+        "filings) = equity_research; market overview, indices, movers, sectors = markets; stock orders and "
+        "positions = equity_trading; crypto orders = crypto_trading; coins, on-chain, DeFi = crypto_center; "
+        "holdings, P&L, allocation, risk = portfolio; watchlists = watchlist; headlines = news; filters and "
+        "stock screens = screener; option chains and strategies = fno; futures, swaps, pricing models = "
+        "derivatives; volatility surfaces = surface_analytics; strategy tests = backtesting; rule-based or "
+        "automated strategies = algo_trading; macro series (GDP, CPI, rates) = economics or dbnomics; "
+        "earnings, dividends, economic events = calendars; ownership and supply-chain links = "
+        "relationship_map; deals and M&A = ma_analytics; prediction markets = polymarket; China / Asia data = "
+        "akshare or asia_markets; notebooks and scripts = code_editor; spreadsheets = excel; written reports "
+        "= report_builder; workflows = node_editor; models, agents, API keys = agent_config or settings; "
+        "notes = notes.");
     return lines.join(QLatin1Char('\n'));
 }
 

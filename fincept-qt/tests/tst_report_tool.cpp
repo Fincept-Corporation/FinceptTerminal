@@ -12,6 +12,16 @@
 #include <QJsonDocument>
 #include <QtTest>
 
+// An absolute path on the platform the test runs on: "C:/<rest>" is absolute only where drive
+// letters exist, so on Linux / macOS the same test used to be refused as a relative path.
+static QString rt_abs(const QString& rest) {
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/") + rest;
+#else
+    return QStringLiteral("/") + rest;
+#endif
+}
+
 using namespace fincept;
 using namespace fincept::mcp;
 using namespace fincept::mcp::core;
@@ -82,7 +92,7 @@ class FakeBackend : public ReportToolBackend {
         asked.append(r);
         done(verdict);
     }
-    QString default_export_dir() const override { return QStringLiteral("C:/Users/x/Documents/Fincept Reports"); }
+    QString default_export_dir() const override { return rt_abs(QStringLiteral("Users/x/Documents/Fincept Reports")); }
     bool file_exists(const QString&) const override { return exists; }
 };
 
@@ -206,14 +216,14 @@ class TestReportTool : public QObject {
         r = call(b, {{"action", "export_report"}, {"format", "markdown"}});
         QVERIFY2(r.success, qPrintable(r.error));
         QCOMPARE(b->exported_format, QStringLiteral("md"));
-        QCOMPARE(b->exported_path, QStringLiteral("C:/Users/x/Documents/Fincept Reports/Q3 Review.md"));
+        QCOMPARE(b->exported_path, rt_abs(QStringLiteral("Users/x/Documents/Fincept Reports/Q3 Review.md")));
         QVERIFY(b->asked.last().destructive);
         QVERIFY(b->asked.last().description.contains(QStringLiteral("REPLACES")));
         QVERIFY(!call(b, {{"action", "export_report"}, {"format", "xls"}}).success);
         QVERIFY(!call(b, {{"action", "export_report"}, {"path", "relative/out.pdf"}}).success);
-        QCOMPARE(ReportToolHandler::normalise_export_path(QStringLiteral("C:/r/x"), QString(), QString(),
+        QCOMPARE(ReportToolHandler::normalise_export_path(rt_abs(QStringLiteral("r/x")), QString(), QString(),
                                                           QStringLiteral("odt"), nullptr),
-                 QStringLiteral("C:/r/x.odt"));
+                 rt_abs(QStringLiteral("r/x.odt")));
     }
 
     // Each write asks with the kind of what it does and the caller's stable ids: an export writes

@@ -944,10 +944,9 @@ ToolDef make_python_tool() {
         "valuation, portfolio, derivatives, risk, backtesting, ML). action=search finds scripts by words; "
         "info shows one script's commands, options and docs; run starts it (returns the result, or a job_id when it "
         "runs longer than wait_s); status waits for a job and returns its result; cancel stops it. Sensitive scripts "
-        "(exchange orders, agents) ask the user first. `args` is a JSON array of strings, one per command-line "
-        "argument, e.g. script=\"yfinance_data\", args=[\"batch_quotes\",\"^GSPC\",\"^DJI\",\"^IXIC\"]. Common ones need "
-        "no search: yfinance_data [quote SYM] / [batch_quotes SYM…] / [historical_period SYM 6mo 1d] / [news SYM 10] / "
-        "[info SYM]; screener_data [predefined day_gainers|day_losers|most_actives 15].");
+        "(exchange orders, agents) ask the user first. `args` is a list of strings, e.g. script=\"yfinance_data\", "
+        "args=[\"batch_quotes\",\"^GSPC\",\"AAPL\"] (also [quote SYM], [news SYM 10]); screener_data "
+        "[predefined day_gainers 15].");
     t.input_schema = ToolSchemaBuilder()
                          .string("action", "search | info | run | status | cancel")
                          .required()

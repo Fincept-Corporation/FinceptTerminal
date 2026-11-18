@@ -265,7 +265,7 @@ void AgentConfigScreen::update_status() {
     QString selection = section_title(section_);
     QString model;
     QString cost;
-    agent_runs::Engine engine;
+    agent_runs::Engine engine{}; // read only when split_run_key() filled it (C4701 under /GL)
     QString id;
     const bool run_shown = inspector_host_ && !inspector_host_->isHidden() && inspector_ &&
                            inspector_->currentWidget() != inspector_empty_ &&
