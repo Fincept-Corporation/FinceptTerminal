@@ -117,15 +117,14 @@ Enterprise needs its own account — free Fincept logins don't sign in to it.
 ## Install
 
 <!-- DOWNLOAD-TABLE-START -->
-Latest release: **v4.5.2** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.5.2)
+Latest release: **v4.5.3** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.5.3)
 
 | Platform | Download | Run |
 |----------|----------|-----|
-| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.2/FinceptTerminal-4.5.2-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
-| **Linux x64 (AppImage)** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.2/FinceptTerminal-4.5.2-linux-x64-setup.run) | `chmod +x` → run installer |
-| **Linux x64 (Debian/Ubuntu)** | [FinceptTerminal-Linux-x64.deb](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.2/FinceptTerminal-4.5.2-linux-x64.deb) | `sudo apt install ./FinceptTerminal-*.deb` |
-| **Linux x64 (Fedora/RHEL)** | [FinceptTerminal-Linux-x64.rpm](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.2/FinceptTerminal-4.5.2-linux-x64.rpm) | `sudo dnf install ./FinceptTerminal-*.rpm` |
-| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.2/FinceptTerminal-4.5.2-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
+| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.3/FinceptTerminal-4.5.3-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
+| **Linux x64 (Flatpak, any distribution)** | [FinceptTerminal-Linux-x86_64.flatpak](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.3/FinceptTerminal-4.5.3-linux-x86_64.flatpak) | `flatpak install --user ./FinceptTerminal-*.flatpak` |
+| **Linux x64 (Ubuntu 22.04+ / Debian 12+)** | [FinceptTerminal-Linux-x64.deb](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.3/FinceptTerminal-4.5.3-linux-x64.deb) | `sudo apt install ./FinceptTerminal-*.deb` |
+| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.5.3/FinceptTerminal-4.5.3-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
 <!-- DOWNLOAD-TABLE-END -->
 
 **Build from source** — Linux/macOS: `git clone … && ./setup.sh`. Windows and manual builds, the pinned toolchain (**CMake 3.27.7 · Ninja 1.11.1 · Qt 6.8.3 · Python 3.11.9**) and troubleshooting live in **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**. Versions are pinned — newer or older ones are unsupported.
