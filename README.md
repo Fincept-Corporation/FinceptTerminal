@@ -57,7 +57,7 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 
 <sub>English · [Deutsch](docs/translations/README.de.md) · [Español](docs/translations/README.es.md) · [Français](docs/translations/README.fr.md) · [हिन्दी](docs/translations/README.hi.md) · [日本語](docs/translations/README.ja.md) · [한국어](docs/translations/README.ko.md) · [简体中文](docs/translations/README.zh-CN.md) · [繁體中文](docs/translations/README.zh-TW.md)</sub>
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptBanner.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptAgenticTerminal.gif)
 
 <table>
   <tr>
