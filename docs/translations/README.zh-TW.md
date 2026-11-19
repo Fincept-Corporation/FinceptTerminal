@@ -28,7 +28,7 @@
 
 [📥 下載](https://github.com/Fincept-Corporation/FinceptTerminal/releases) · [🏢 Enterprise](https://fincept.in/enterprise) · [💳 價格](https://fincept.in/pricing) · [📖 手冊](https://fincept.in/manual) · [💬 Discord](https://discord.gg/ae87a8ygbN)
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptBanner.png)
+https://github.com/user-attachments/assets/f8fbabf2-400b-4d66-9e9c-565c8bda5a50
 
 </div>
 
